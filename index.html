@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Carte des projets — Mousquetaires Solaire</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0B1D2A;
+  --panel:#112C40;
+  --panel-2:#0E2536;
+  --line: rgba(255,255,255,0.09);
+  --text:#EAF1F6;
+  --text-dim:#93A9BB;
+  --amber:#F2A93B;
+
+  --c-signe:#3FBE8E;
+  --c-etude:#4C8DFF;
+  --c-attente:#F2A93B;
+  --c-discussion:#B084F0;
+  --c-ko:#E5533D;
+  --c-incomplet:#E5533D;
+  --c-prospect:#5FD4D0;
+
+  --sea:#1D5073;
+  --sea-2:#153E5A;
+  --land:#F2EEE3;
+  --land-line:#D8D0BC;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;background:var(--ink);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden;}
+#app{display:flex;height:100vh;width:100vw;}
+
+/* ---------- Sidebar ---------- */
+#sidebar{
+  width:340px;min-width:340px;
+  background:var(--panel);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;
+  z-index:20;
+  position:relative;
+}
+#sidebar::before{
+  content:"";position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--amber),transparent 70%);
+}
+.brand{
+  padding:20px 20px 14px;border-bottom:1px solid var(--line);
+}
+.brand .tag{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;
+  color:var(--amber);text-transform:uppercase;
+}
+.brand h1{
+  font-family:'Space Grotesk',sans-serif;font-size:19px;margin:4px 0 2px;font-weight:700;
+  letter-spacing:-.01em;
+}
+.brand p{margin:0;font-size:12px;color:var(--text-dim);}
+
+.scroll{flex:1;overflow-y:auto;padding:16px 20px 8px;}
+.scroll::-webkit-scrollbar{width:6px;}
+.scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px;}
+
+.block{margin-bottom:20px;}
+.block h2{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text-dim);margin:0 0 10px;display:flex;align-items:center;gap:8px;
+}
+.block h2::after{content:"";flex:1;height:1px;background:var(--line);}
+
+.layer-toggle{display:flex;gap:8px;}
+.layer-btn{
+  flex:1;padding:9px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--text-dim);font-size:12.5px;font-weight:600;cursor:pointer;text-align:center;transition:.15s;
+}
+.layer-btn.active{background:rgba(242,169,59,0.14);border-color:var(--amber);color:var(--amber);}
+.layer-btn .n{display:block;font-family:'IBM Plex Mono',monospace;font-size:16px;margin-top:2px;color:var(--text);}
+.layer-btn.active .n{color:var(--amber);}
+
+.chip{
+  display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:7px;cursor:pointer;
+  font-size:12.5px;margin-bottom:3px;border:1px solid transparent;transition:.12s;
+}
+.chip:hover{background:rgba(255,255,255,.04);}
+.chip.off{opacity:.35;}
+.chip .swatch{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 2px rgba(255,255,255,.06);}
+.chip .sq{border-radius:2px;}
+.chip .diamond{border-radius:2px;transform:rotate(45deg);}
+.chip .triangle{
+  width:0;height:0;background:transparent!important;box-shadow:none;
+  border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid;
+}
+.chip .count{margin-left:auto;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);font-size:11.5px;}
+
+select, input[type="text"]{
+  width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--text);font-size:13px;font-family:'Inter',sans-serif;
+}
+select:focus, input:focus{outline:none;border-color:var(--amber);}
+
+.stat-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--text-dim);}
+.stat-row b{color:var(--text);font-family:'IBM Plex Mono',monospace;font-weight:500;}
+
+.hint{
+  font-size:11px;color:var(--text-dim);line-height:1.5;padding:10px 12px;
+  background:var(--panel-2);border-radius:8px;border:1px dashed var(--line);margin-top:4px;
+}
+.hint b{color:var(--amber);}
+
+#geo-status{
+  padding:12px 20px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text-dim);
+  font-family:'IBM Plex Mono',monospace;
+}
+#geo-status .bar{height:3px;background:var(--panel-2);border-radius:2px;margin-top:6px;overflow:hidden;}
+#geo-status .fill{height:100%;background:var(--amber);width:0%;transition:width .3s;}
+
+/* ---------- Map area ---------- */
+#map-wrap{flex:1;position:relative;background:radial-gradient(ellipse at 50% 40%, var(--sea) 0%, var(--sea-2) 100%);}
+#map{position:absolute;inset:0;background:transparent;}
+.leaflet-container{background:transparent;font-family:'Inter',sans-serif;}
+.france-shape{fill:var(--land);stroke:var(--land-line);stroke-width:1;}
+
+#topbar{
+  position:absolute;top:16px;left:16px;right:16px;z-index:15;
+  display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;
+}
+#search-box{
+  pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  padding:9px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+  width:280px;
+}
+#search-box input{border:none;background:transparent;padding:0;font-size:13px;}
+#search-box svg{flex-shrink:0;opacity:.6;}
+
+#list-panel{
+  pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);width:280px;max-height:0;overflow:hidden;transition:max-height .25s ease;
+}
+#list-panel.open{max-height:60vh;}
+#list-panel .lp-head{
+  padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);
+  border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+}
+#list-panel .lp-body{max-height:calc(60vh - 38px);overflow-y:auto;}
+.lp-item{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px;}
+.lp-item:hover{background:rgba(255,255,255,.05);}
+.lp-item .lp-name{font-weight:600;}
+.lp-item .lp-meta{color:var(--text-dim);font-size:11px;margin-top:2px;}
+
+/* marker popup */
+.leaflet-popup-content-wrapper{
+  background:var(--panel);color:var(--text);border-radius:10px;border:1px solid var(--line);
+}
+.leaflet-popup-tip{background:var(--panel);}
+.leaflet-popup-content{margin:14px 16px;min-width:220px;}
+.pop-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14.5px;margin-bottom:6px;}
+.pop-status{
+  display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;font-weight:600;
+  margin-bottom:8px;font-family:'IBM Plex Mono',monospace;
+}
+.pop-row{font-size:12px;color:var(--text-dim);margin:3px 0;display:flex;gap:6px;}
+.pop-row b{color:var(--text);font-weight:600;}
+.pop-comment{
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text-dim);
+  font-style:italic;line-height:1.4;
+}
+.pop-drag{margin-top:8px;font-size:10.5px;color:var(--amber);}
+
+.corner-tick{position:absolute;width:18px;height:18px;border:1.5px solid rgba(255,255,255,.18);z-index:14;pointer-events:none;}
+.ct-tl{top:12px;left:12px;border-right:none;border-bottom:none;}
+.ct-br{bottom:12px;right:12px;border-left:none;border-top:none;}
+
+.leaflet-control-attribution{background:rgba(11,29,42,.7)!important;color:var(--text-dim)!important;}
+.leaflet-control-attribution a{color:var(--text-dim)!important;}
+.leaflet-control-zoom a{background:var(--panel)!important;color:var(--text)!important;border-color:var(--line)!important;}
+
+/* hover tooltip */
+.custom-tooltip{
+  background:var(--panel)!important;color:var(--text)!important;border:1px solid var(--line)!important;
+  border-radius:10px!important;box-shadow:0 10px 26px rgba(0,0,0,.4)!important;
+  padding:0!important;opacity:0.98!important;
+}
+.custom-tooltip::before{display:none;}
+.tt-content{padding:12px 14px;min-width:210px;max-width:260px;}
+.tt-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;margin-bottom:5px;}
+.tt-status{
+  display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;font-weight:600;
+  margin-bottom:7px;font-family:'IBM Plex Mono',monospace;
+}
+.tt-row{font-size:11.5px;color:var(--text-dim);margin:2px 0;}
+.tt-row b{color:var(--text);font-weight:600;}
+.tt-comment{
+  margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px;color:var(--text-dim);
+  font-style:italic;line-height:1.4;
+}
+.tt-source{
+  margin-top:6px;font-size:10px;font-family:'IBM Plex Mono',monospace;
+}
+
+/* data / export buttons */
+.action-btn{
+  width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;text-align:left;
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;transition:.15s;font-family:'Inter',sans-serif;
+}
+.action-btn:hover{border-color:var(--amber);color:var(--amber);}
+.action-btn svg{flex-shrink:0;}
+.data-meta{font-size:10.5px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;margin-top:2px;line-height:1.5;}
+.data-meta a{color:var(--amber);text-decoration:none;}
+#import-status{font-size:11px;color:var(--amber);margin-top:4px;min-height:14px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="brand">
+      <div class="tag">Suivi commercial — Solaire</div>
+      <h1>Carte des projets</h1>
+      <p>Réseau Mousquetaires — TI / EPC</p>
+    </div>
+
+    <div class="scroll">
+      <div class="block">
+        <h2>Portefeuille</h2>
+        <div class="layer-toggle">
+          <div class="layer-btn active" data-layer="suivi">Projets en cours<span class="n" id="n-suivi">0</span></div>
+          <div class="layer-btn active" data-layer="prospect">Prospects<span class="n" id="n-prospect">0</span></div>
+        </div>
+      </div>
+
+      <div class="block" id="block-statut">
+        <h2>Statut</h2>
+        <div id="statut-list"></div>
+      </div>
+
+      <div class="block" id="block-type">
+        <h2>Type d'installation</h2>
+        <div id="type-list"></div>
+      </div>
+
+      <div class="block">
+        <h2>Commercial</h2>
+        <select id="commercial-select">
+          <option value="">Tous les commerciaux</option>
+        </select>
+      </div>
+
+      <div class="block">
+        <h2>Répartition</h2>
+        <div id="stats-box"></div>
+      </div>
+
+      <div class="block">
+        <h2>Synchronisation automatique</h2>
+        <input type="text" id="sync-url-input" placeholder="URL JSON publiée (Power Automate)…">
+        <div class="action-btn" id="btn-save-sync" style="margin-top:8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 15c.4-1 .6-2 .6-3 0-5-4-9-9-9-4.2 0-7.7 3-8.7 7"/><path d="M2.8 9c-.4 1-.6 2-.6 3 0 5 4 9 9 9 4.2 0 7.7-3 8.7-7"/><polyline points="17 3 21 3 21 7"/><polyline points="7 21 3 21 3 17"/></svg>
+          Activer la synchro sur cette adresse
+        </div>
+        <div class="data-meta" id="sync-status">Aucune synchronisation automatique configurée — voir README.md (déploiement GitHub + Azure) pour la mettre en place pour tous les visiteurs du lien.</div>
+        <div class="hint" style="margin-top:8px;">Une fois la fonction Azure déployée, cette adresse peut être pré-configurée dans le fichier (<code>DEFAULT_SYNC_URL</code>) : chaque visiteur du lien verra alors des données à jour, sans rien régler lui-même.</div>
+      </div>
+
+      <div class="block">
+        <h2>Données</h2>
+        <input type="file" id="file-input" accept=".xlsm,.xlsx" style="display:none">
+        <div class="action-btn" id="btn-import">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Mettre à jour depuis Excel
+        </div>
+        <div class="action-btn" id="btn-export">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          Exporter la carte (JPEG)
+        </div>
+        <div class="data-meta" id="data-meta">Données intégrées à la création de l'outil.</div>
+        <div id="import-status"></div>
+        <div class="hint" style="margin-top:8px;">Les données importées restent mémorisées <b>sur cet ordinateur et ce navigateur</b> (le fichier HTML lui-même ne peut pas être réécrit). Sur un autre poste, réimportez le fichier une fois.</div>
+      </div>
+
+      <div class="hint"><b>Astuce —</b> un point mal placé ? Glissez-le à la bonne adresse : la correction est enregistrée automatiquement.</div>
+    </div>
+
+    <div id="geo-status">
+      <div id="geo-text">Localisation des projets…</div>
+      <div class="bar"><div class="fill" id="geo-fill"></div></div>
+    </div>
+  </div>
+
+  <div id="map-wrap">
+    <div class="corner-tick ct-tl"></div>
+    <div class="corner-tick ct-br"></div>
+    <div id="map"></div>
+    <div id="topbar">
+      <div id="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher un projet, une ville…">
+      </div>
+      <div id="list-panel">
+        <div class="lp-head"><span id="lp-count">0 résultats</span><span style="cursor:pointer" id="lp-close">✕</span></div>
+        <div class="lp-body" id="lp-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+/* ================= DATA ================= */
+const RAW = {"suivi": [{"projet": "Villers-les-Nancy toiture", "coords": [48.65766442555422, 6.111890666703284], "puissance": "KO", "type": "EPC", "commentaires": "Pas de fiche projet demandée à Arthur", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "25/05/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "NON", "projetFini": "KO", "commercial1": "Arthur B", "commercial2": "", "commentaire2": "Rétrofit partiel à chiffrer", "statut": "KO"}, {"projet": "Audincourt", "coords": [47.486220867411724, 6.844506585620921], "puissance": "167", "type": "EPC", "commentaires": "Même client que Pont-de-Roide", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "20/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "OUI", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "R3 29/07", "statut": "Projet signé"}, {"projet": "Pont de Roide", "coords": [47.388834571865026, 6.7682848550755415], "puissance": "193", "type": "EPC", "commentaires": "Demande urgente", "deadlinePA": "02/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "", "deadlineR2": "20/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "OUI", "commercial1": "Arthur V", "commercial2": "Jonathan", "commentaire2": "R3 29/07", "statut": "Projet signé"}, {"projet": "Coudekerque", "coords": [51.02377792385415, 2.368672627623084], "puissance": "?", "type": "LES 2", "commentaires": "PA V2 envoyé le 07/04", "deadlinePA": "07/04/2026", "paEnvoyee": "OUI", "nbPA": "2", "paValidee": "?", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "Client ne répond pas et peut-être pas propriétaire", "statut": "En attente retour suite PA"}, {"projet": "Guise", "coords": [49.904283299553235, 3.6441872043385133], "puissance": "231", "type": "EPC", "commentaires": "", "deadlinePA": "15/05/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "08/07/2026", "offreEnvoyee": "OUI", "nbR2": "2", "offreValidee": "?", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Luxeuil les Bains", "coords": [47.81051245897805, 6.3620844612398315], "puissance": "367", "type": "TI", "commentaires": "", "deadlinePA": "24/06/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "10/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Mourmelon-le-Grand", "coords": [49.13400289221077, 4.366457337312015], "puissance": "244", "type": "EPC", "commentaires": "", "deadlinePA": "21/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "28/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "", "statut": "Etude en cours"}, {"projet": "Bazeilles", "coords": [49.68473793588932, 4.972842253783807], "puissance": "303", "type": "EPC", "commentaires": "Non respect de la loi APER, il faut qu'il mette des arbres", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "25/03/2026", "offreEnvoyee": "OUI", "nbR2": "2", "offreValidee": "OUI", "projetFini": "OUI", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "", "statut": "Projet signé"}, {"projet": "Saint-Usage", "coords": [47.1107473257487, 5.2554787506469225], "puissance": "251", "type": "EPC", "commentaires": "", "deadlinePA": "15/07/2026", "paEnvoyee": "OUI", "nbPA": "2", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "21/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "R1,5 le 16/07 R2 le 21/07 C'est trop court", "statut": "Reprise suite R2"}, {"projet": "Netto Genlis", "coords": [47.236256298903584, 5.225785311444117], "puissance": "97", "type": "EPC", "commentaires": "Pas de facture", "deadlinePA": "16/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "21/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "", "statut": "Reprise suite R2"}, {"projet": "Intermarché Genlis", "coords": [47.24615436194931, 5.219987161168171], "puissance": "203", "type": "EPC", "commentaires": "", "deadlinePA": "16/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "21/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "NON", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "", "statut": "Reprise suite R2"}, {"projet": "Netto Mourmelon-le-Grand", "coords": [49.1400869243699, 4.358756715327481], "puissance": "55", "type": "EPC", "commentaires": "", "deadlinePA": "29/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "21/08/2026", "offreEnvoyee": "NON", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "", "commentaire2": "", "statut": "Etude en cours"}, {"projet": "Beaune", "coords": [47.02046757374023, 4.8563303242804645], "puissance": "251", "type": "EPC", "commentaires": "R1,5 le 25/08 ou R2 à confirmer", "deadlinePA": "06/08/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "NON", "deadlineR2": "19/08/2026", "offreEnvoyee": "NON", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Arthur V", "commercial2": "Jonathan", "commentaire2": "", "statut": "Etude en cours"}, {"projet": "Beauvoir-sur-Mer", "coords": [46.90934289385119, -2.0303114794215644], "puissance": "KO", "type": "LES 2", "commentaires": "Manque mandat ENEDIS demandé à Denis", "deadlinePA": "24/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "15/05/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "KO", "commercial1": "Denis", "commercial2": "François", "commentaire2": "signé avec la concurrence (IEL)", "statut": "KO"}, {"projet": "Sainte Marie des Champs", "coords": [49.6254456384866, 0.7846542781471384], "puissance": "KO", "type": "LES 2", "commentaires": "", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "26/05/2026", "offreEnvoyee": "OUI", "nbR2": "2", "offreValidee": "?", "projetFini": "KO", "commercial1": "Denis", "commercial2": "Jonathan", "commentaire2": "KO", "statut": "KO"}, {"projet": "Domarin", "coords": [45.590229102591415, 5.241430579395359], "puissance": "367", "type": "EPC", "commentaires": "", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "27/05/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Florence", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Pleyben", "coords": [48.22087752540373, -3.977814605425993], "puissance": "196", "type": "EPC", "commentaires": "Manque mandat ENEDIS demandé à Denis", "deadlinePA": "24/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "12/05/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "François", "commercial2": "Denis", "commentaire2": "Client injoignable (06/07)", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Champagné", "coords": [48.02380032259629, 0.3371994034350187], "puissance": "143", "type": "EPC", "commentaires": "R2 V2 envoyé à François", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "03/04/2026", "offreEnvoyee": "OUI", "nbR2": "3", "offreValidee": "NON", "projetFini": "NON", "commercial1": "François", "commercial2": "", "commentaire2": "François tente régulièrement de joindre l'adhérente sans succès", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Cholet", "coords": [47.05470750494442, -0.8746228270535072], "puissance": "158", "type": "EPC", "commentaires": "En attente retour de François", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "13/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "François", "commercial2": "", "commentaire2": "", "statut": "Etude en cours"}, {"projet": "Cholet espace Marne", "coords": [47.05175070876132, -0.8857325364200949], "puissance": "413", "type": "EPC", "commentaires": "", "deadlinePA": "28/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "31/07/2026", "offreEnvoyee": "NON", "nbR2": "2", "offreValidee": "NON", "projetFini": "NON", "commercial1": "François", "commercial2": "", "commentaire2": "Lié à l'autre Intermarché Cholet", "statut": "Reprise suite R2"}, {"projet": "Netto Chateauneuf-les-Martigues", "coords": [43.38983770912875, 5.162875598987601], "puissance": "106", "type": "TI", "commentaires": "Il manque plein de choses", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "13/05/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "NON", "commercial1": "Gaëtan", "commercial2": "Solal", "commentaire2": "Retour septembre", "statut": "Discussions/validations"}, {"projet": "Le Bugue", "coords": [44.91554473608357, 0.9238136243406248], "puissance": "", "type": "EPC", "commentaires": "(M. Flores à rappeler le 20/07)", "deadlinePA": "06/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "?", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Gaëtan", "commercial2": "Solal", "commentaire2": "", "statut": "En attente retour suite PA"}, {"projet": "Tartas", "coords": [43.83310500265735, -0.811481218779164], "puissance": "103", "type": "TI", "commentaires": "", "deadlinePA": "07/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "15/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Gaëtan", "commercial2": "Solal", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Saint Porchaire", "coords": [45.81396343327001, -0.7729309683751671], "puissance": "", "type": "DOCS INCOMPLETS", "commentaires": "Revoir avec François et Grégoire", "deadlinePA": "", "paEnvoyee": "NON", "nbPA": "", "paValidee": "", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Grégoire", "commercial2": "François", "commentaire2": "Prochain contact début juillet", "statut": "Demande incomplète"}, {"projet": "Brioux sur Boutonne", "coords": [46.1395494220991, -0.2213675781577631], "puissance": "", "type": "LES 2", "commentaires": "", "deadlinePA": "18/06/2026", "paEnvoyee": "OUI", "nbPA": "2", "paValidee": "?", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Grégoire", "commercial2": "François", "commentaire2": "R1,5 le 17/07 ?", "statut": "En attente retour suite PA"}, {"projet": "Saint-Romain-le-Puy", "coords": [45.55448418731952, 4.120088134711205], "puissance": "112", "type": "EPC", "commentaires": "Se baser sur le PC", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "09/04/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Jérémie", "commercial2": "", "commentaire2": "no go de mousquetaire en attente d'un rdv pour negocier  (23/07)", "statut": "Discussions/validations"}, {"projet": "Châtellerault", "coords": [46.84037765811397, 0.5464313976323552], "puissance": "241", "type": "EPC", "commentaires": "", "deadlinePA": "16/03/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "10/04/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Jérémie", "commercial2": "", "commentaire2": "repond pas 20 appel + mails  (23/07)", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Ste Maure de Touraine", "coords": [47.10253451769132, 0.6152766638398607], "puissance": "417", "type": "EPC", "commentaires": "", "deadlinePA": "16/03/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "10/04/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Jérémie", "commercial2": "", "commentaire2": "meme proprio que chatellerault", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Beauregard Le Mans", "coords": [48.028094268590706, 0.18225080953399325], "puissance": "377", "type": "LES 2", "commentaires": "C'est sûr R2 13/04 ???", "deadlinePA": "23/03/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "13/04/2026", "offreEnvoyee": "OUI", "nbR2": "2", "offreValidee": "?", "projetFini": "NON", "commercial1": "Jérémie", "commercial2": "", "commentaire2": "Doit se rappeler fin aout", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Combourg", "coords": [48.41723912611604, -1.7497976309295447], "puissance": "332", "type": "EPC", "commentaires": "Dans le planner", "deadlinePA": "25/03/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "16/04/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "NON", "commercial1": "Jérémie", "commercial2": "", "commentaire2": "reprise envoyé le 12/08", "statut": "Discussions/validations"}, {"projet": "Plélan-le-Petit", "coords": [48.432072199991154, -2.218411141277718], "puissance": "122", "type": "EPC", "commentaires": "PA envoyé le 03/04", "deadlinePA": "09/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "21/04/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Jérémie", "commercial2": "", "commentaire2": "Relance demain (23/07)", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Chilly Mazarin", "coords": [48.70533706960561, 2.296228937846014], "puissance": "KO", "type": "TI", "commentaires": "Immo mousquetaire", "deadlinePA": "22/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "27/04/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "KO", "commercial1": "Jérémie", "commercial2": "", "commentaire2": "Immo mousquetaire KO", "statut": "KO"}, {"projet": "Aixe sur Vienne", "coords": [45.79174496678351, 1.1369979284793212], "puissance": "254", "type": "EPC", "commentaires": "PA Envoyé le 07/04", "deadlinePA": "07/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "06/07/2026", "offreEnvoyee": "OUI", "nbR2": "2", "offreValidee": "NON", "projetFini": "NON", "commercial1": "Jérémy Delord", "commercial2": "", "commentaire2": "", "statut": "Discussions/validations"}, {"projet": "Bricomarché Bollène", "coords": [44.318723936373296, 4.744559809380068], "puissance": "290", "type": "EPC", "commentaires": "", "deadlinePA": "16/06/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "07/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Jérémy L", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Intermarché Nuits St Georges", "coords": [47.14105361513649, 4.949011448268312], "puissance": "202", "type": "EPC", "commentaires": "A faire pour vendredi", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "18/06/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "OUI", "commercial1": "Jérémy L", "commercial2": "Morgan", "commentaire2": "", "statut": "Projet signé"}, {"projet": "Netto Nuits St Georges", "coords": [47.13784378252077, 4.957237050719518], "puissance": "119", "type": "EPC", "commentaires": "A faire pour vendredi", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "23/06/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "OUI", "commercial1": "Jérémy L", "commercial2": "Morgan", "commentaire2": "", "statut": "Projet signé"}, {"projet": "Malissol", "coords": [45.51871474240481, 4.918881760538191], "puissance": "164", "type": "EPC", "commentaires": "Likewatt \"Vienne\"", "deadlinePA": "09/06/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "29/06/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "OUI", "commercial1": "Jérémy L", "commercial2": "", "commentaire2": "", "statut": "Projet signé"}, {"projet": "Cochame (Coulounieix)", "coords": [45.17116905880134, 0.6893999107104146], "puissance": "80", "type": "TI", "commentaires": "Il manque un plan", "deadlinePA": "30/06/2026", "paEnvoyee": "OUI", "nbPA": "2", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "23/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Jérôme", "commercial2": "Grégoire", "commentaire2": "Immo mousquetaire", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Villers-les-Nancy ombrière", "coords": [48.65760950124902, 6.11227288146885], "puissance": "113", "type": "EPC", "commentaires": "", "deadlinePA": "08/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "21/08/2026", "offreEnvoyee": "NON", "nbR2": "1", "offreValidee": "NON", "projetFini": "NON", "commercial1": "Léo", "commercial2": "Jonathan", "commentaire2": "Rajouter les 2 places à gauche, couper les arbres\nOmbrière poids lourd 4,5m\nTGBT à l'arrière du bâtiment\nTarif à 14 c€ en 1ère année\nhabillage Intermarché coté route à chiffrer (comme Rambervilliers)\nBornes abandonnées\nEmprunt à 3,8%\n3 concurrents : Iris Solaris + Premium solaire\nDécision au mois de septembre, R2bis fin aout, visite à Pont-à-Mousson", "statut": "Etude en cours"}, {"projet": "Chatillon-sur-Seine", "coords": [47.86613377841928, 4.572726016368997], "puissance": "391", "type": "EPC", "commentaires": "EPC, bornes, batteries", "deadlinePA": "25/06/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "24/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Léo", "commercial2": "Jonathan", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Rambervilliers", "coords": [48.338427575954945, 6.633870506593169], "puissance": "138", "type": "EPC", "commentaires": "", "deadlinePA": "09/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "27/04/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "OUI", "commercial1": "Léo", "commercial2": "", "commentaire2": "Dénouement (positif) le 21/07", "statut": "Projet signé"}, {"projet": "Souzy", "coords": [45.6995486881927, 4.4541739125806705], "puissance": "264", "type": "EPC", "commentaires": "(Bonnet sur Likewatt) Consulter la fiche projet", "deadlinePA": "20/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "10/08/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "", "commercial1": "Morgan", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Vernoux-en-Vivarais", "coords": [44.89816747478711, 4.648556754876946], "puissance": "166", "type": "EPC", "commentaires": "Consulter la fiche projet", "deadlinePA": "20/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "06/08/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "", "commercial1": "Morgan", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "St-Julien-Chapteuil", "coords": [45.036278263657465, 4.0499138205009775], "puissance": "155", "type": "EPC", "commentaires": "", "deadlinePA": "15/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "17/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Morgan", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Salignac", "coords": [44.974278506981584, 1.314561454880052], "puissance": "KO", "type": "DOCS INCOMPLETS", "commentaires": "", "deadlinePA": "14/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "?", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "?", "projetFini": "NON", "commercial1": "Nolwenn", "commercial2": "Jérémy Delord", "commentaire2": "", "statut": "KO"}, {"projet": "Intermarché Hautefort Pompadour", "coords": [45.26702997360668, 1.136824714869118], "puissance": "KO", "type": "DOCS INCOMPLETS", "commentaires": "KO ils veulent que des bornes", "deadlinePA": "", "paEnvoyee": "KO", "nbPA": "", "paValidee": "", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "0", "offreValidee": "", "projetFini": "KO", "commercial1": "Nolwenn", "commercial2": "", "commentaire2": "", "statut": "KO"}, {"projet": "Coutras", "coords": [45.049379258635035, -0.12328089909064326], "puissance": "KO", "type": "TI", "commentaires": "Manque fiche projet mais TI AC\nIMMO MOUSQUETAIRE", "deadlinePA": "27/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "?", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Patrick", "commercial2": "Jonathan", "commentaire2": "En attente de la réponse du voisin (Bricomarché) qui est plutôt réfractaire aux ombrières", "statut": "KO"}, {"projet": "Sorgues", "coords": [44.01825266660614, 4.870669741348267], "puissance": "KO", "type": "DOCS INCOMPLETS", "commentaires": "KO le client passe avec une autre entreprise", "deadlinePA": "", "paEnvoyee": "KO", "nbPA": "", "paValidee": "", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "KO", "commercial1": "Solal", "commercial2": "Gaëtan", "commentaire2": "", "statut": "KO"}, {"projet": "Saint-Amant-de-Boixe", "coords": [45.80349095393139, 0.14015067080873628], "puissance": "", "type": "TI", "commentaires": "", "deadlinePA": "30/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "NON", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Solal", "commercial2": "Gaëtan", "commentaire2": "En attente d'un retour de TILT", "statut": "PA en cours"}, {"projet": "Gratentour", "coords": [43.713779464424576, 1.418776289763822], "puissance": "", "type": "LES 2", "commentaires": "", "deadlinePA": "05/08/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "?", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Solal", "commercial2": "Gaëtan", "commentaire2": "", "statut": "En attente retour suite PA"}, {"projet": "Saint-Paulien", "coords": [45.13192235554691, 3.8141946647301226], "puissance": "", "type": "EPC", "commentaires": "Pas mal de contraintes", "deadlinePA": "09/07/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "?", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Valerian", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite PA"}, {"projet": "Asnans-Beauvoisin", "coords": [46.95643132716983, 5.403513645718586], "puissance": "213", "type": "EPC", "commentaires": "Immo mousquetaire", "deadlinePA": "04/05/2026", "paEnvoyee": "OUI", "nbPA": "2", "paValidee": "OUI", "plannerCree": "OUI", "deadlineR2": "30/06/2026", "offreEnvoyee": "OUI", "nbR2": "2", "offreValidee": "?", "projetFini": "NON", "commercial1": "Valerian", "commercial2": "", "commentaire2": "Passage en EPC, offre envoyée au client", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Chamboeuf", "coords": [45.5836703048681, 4.302715760450897], "puissance": "KO", "type": "DOCS INCOMPLETS", "commentaires": "ABANDONNE", "deadlinePA": "", "paEnvoyee": "KO", "nbPA": "", "paValidee": "", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "KO", "commercial1": "Valerian", "commercial2": "", "commentaire2": "", "statut": "KO"}, {"projet": "Bonneville", "coords": [46.08327092647908, 6.403501457998633], "puissance": "146", "type": "EPC", "commentaires": "", "deadlinePA": "Non concerné", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "NON", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Valerian", "commercial2": "", "commentaire2": "Uniquement devis envoyé", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Saint-Sauveur", "coords": [45.15747156441318, 5.333643051190124], "puissance": "", "type": "TI", "commentaires": "", "deadlinePA": "06/08/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "?", "plannerCree": "NON", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Valerian", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite PA"}, {"projet": "La Palisse", "coords": [46.2569536985161, 3.622127423695795], "puissance": "", "type": "LES 2", "commentaires": "Proposer plusieurs implantations/ pas de plan fourni", "deadlinePA": "10/08/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "?", "plannerCree": "NON", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Valerian", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite PA"}, {"projet": "Trélissac", "coords": [45.19810107441718, 0.7409042487903954], "puissance": "", "type": "TI", "commentaires": "Immo mousquetaire", "deadlinePA": "23/04/2026", "paEnvoyee": "OUI", "nbPA": "1", "paValidee": "OUI", "plannerCree": "Non concerné", "deadlineR2": "15/06/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "OUI", "projetFini": "NON", "commercial1": "Vincent", "commercial2": "Solal", "commentaire2": "", "statut": "Discussions/validations"}, {"projet": "Venerque", "coords": [43.42881948164389, 1.4459186640617043], "puissance": "238", "type": "TI", "commentaires": "", "deadlinePA": "19/06/2026", "paEnvoyee": "Non concerné", "nbPA": "Non concerné", "paValidee": "Non concerné", "plannerCree": "OUI", "deadlineR2": "10/07/2026", "offreEnvoyee": "OUI", "nbR2": "1", "offreValidee": "?", "projetFini": "NON", "commercial1": "Vincent", "commercial2": "", "commentaire2": "", "statut": "En attente retour suite R2 ou R2 en attente"}, {"projet": "Bricomarché Rive de Gier", "coords": [45.52565292451629, 4.607165783737998], "puissance": "", "type": "DOCS INCOMPLETS", "commentaires": "Manque plan", "deadlinePA": "24/08/2026", "paEnvoyee": "NON", "nbPA": "", "paValidee": "", "plannerCree": "", "deadlineR2": "", "offreEnvoyee": "", "nbR2": "", "offreValidee": "", "projetFini": "NON", "commercial1": "Morgan", "commercial2": "", "commentaire2": "", "statut": "Demande incomplète"}], "prospect": [{"projet": "BRICOMARCHE Clamecy", "geo": "BRICOMARCHE Clamecy", "statut": "R1 à caler", "commercial1": "Arthur B", "commercial2": "", "commentaire": "Appel le 21/07"}, {"projet": "Dannemarie", "geo": "Dannemarie", "statut": "R1 prévu", "commercial1": "Arthur B", "commercial2": "", "commentaire": "Appel en septembre"}, {"projet": "INTERMARCHE CORMICY", "geo": "INTERMARCHE CORMICY", "statut": "KO", "commercial1": "Arthur V", "commercial2": "", "commentaire": "Disparu du CRM"}, {"projet": "Nanteuil-le-Haudoin", "geo": "Nanteuil-le-Haudoin", "statut": "R1 à caler", "commercial1": "Arthur V", "commercial2": "", "commentaire": "parking récent, jeunes arbres plantés, PV déjà en toiture"}, {"projet": "Etréchy", "geo": "Etréchy", "statut": "R1 à caler", "commercial1": "Arthur V", "commercial2": "", "commentaire": "places de parking en épi compliqué"}, {"projet": "Angers", "geo": "Angers", "statut": "R1 à caler", "commercial1": "Denis", "commercial2": "", "commentaire": "R1 reporté"}, {"projet": "Saint-Rémy-des Monts", "geo": "Saint-Rémy-des Monts", "statut": "R1 à caler", "commercial1": "Denis", "commercial2": "", "commentaire": "Demande d'étude à venir ?"}, {"projet": "Montluçon", "geo": "Montluçon", "statut": "KO", "commercial1": "Jérémy Delord", "commercial2": "", "commentaire": "TI mousquetaire Immo"}, {"projet": "Bellac", "geo": "Bellac", "statut": "KO", "commercial1": "Jérémy Delord", "commercial2": "Vincent", "commentaire": "R1 prévu le 9/07 TI Immo mousquetaire"}, {"projet": "Chagny", "geo": "Chagny", "statut": "R1 fait", "commercial1": "Jérémy Delord", "commercial2": "", "commentaire": "R1 début juin enseigne sur ombrière 10k€-12k€ SOG Solar pour visuel\nJeremy fait la demande de R1,5"}, {"projet": "Intermarché Saint-Maximin", "geo": "Intermarché Saint-Maximin", "statut": "R1 prévu", "commercial1": "Jérémy L", "commercial2": "", "commentaire": "R1 le 31/08 ??"}, {"projet": "Intermarché Garéoult", "geo": "Intermarché Garéoult", "statut": "R1 fait", "commercial1": "Jérémy L", "commercial2": "", "commentaire": "2ème R1 le 31/08 ??"}, {"projet": "NETTO Villefontaine", "geo": "NETTO Villefontaine", "statut": "R1 à caler", "commercial1": "Jérémy L", "commercial2": "", "commentaire": "actuellement en congé souhaite envisager le projet pour septembre"}, {"projet": "Lugrin", "geo": "Lugrin", "statut": "R1 fait", "commercial1": "Jérémy L", "commercial2": "", "commentaire": "attente pour rdv R1.5"}, {"projet": "Givors", "geo": "Givors", "statut": "KO", "commercial1": "Jérémy L", "commercial2": "", "commentaire": "hors critères parking en copro, n’a pas l’accord des autres proprio"}, {"projet": "Bricomarché Montélier", "geo": "Bricomarché Montélier", "statut": "R1 à caler", "commercial1": "Jérémy L", "commercial2": "", "commentaire": "Jérémy le recontacte en septembre (toiture)"}, {"projet": "Nevers", "geo": "Nevers", "statut": "R1 à caler", "commercial1": "Jérémy L", "commercial2": "", "commentaire": "R1 le 24/08 ??"}, {"projet": "Ménesplet (Leoxime)", "geo": "Ménesplet (Leoxime)", "statut": "KO", "commercial1": "Jérôme", "commercial2": "", "commentaire": "Hors process"}, {"projet": "Servas", "geo": "Servas", "statut": "R1 difficile à caler", "commercial1": "Jonathan", "commercial2": "", "commentaire": "Prochain contact en septembre"}, {"projet": "Chazay d'Azergues", "geo": "Chazay d'Azergues", "statut": "R1 difficile à caler", "commercial1": "Jonathan", "commercial2": "", "commentaire": "Prochain contact en septembre"}, {"projet": "Bricomarche Ozoir-la-Ferrière", "geo": "Bricomarche Ozoir-la-Ferrière", "statut": "KO", "commercial1": "Léo", "commercial2": "", "commentaire": "A voir pk KO"}, {"projet": "Troibecs", "geo": "Troibecs", "statut": "R1 à caler", "commercial1": "Morgan", "commercial2": "", "commentaire": "R1 le 24/08 ??"}, {"projet": "Replonges", "geo": "Replonges", "statut": "R1 difficile à caler", "commercial1": "Morgan", "commercial2": "", "commentaire": "En attente de l'été plus de visibilité Immo"}, {"projet": "Tullins", "geo": "Tullins", "statut": "R1 difficile à caler", "commercial1": "Morgan", "commercial2": "Valerian", "commentaire": "A Recontacter en septembre\nPlutôt ouvert mais pas trop disponible en ce moment\nAdhérant propriétaire de plusieurs pdv (Inter Tullins - Netto Renage)"}, {"projet": "La Fouillade", "geo": "La Fouillade", "statut": "KO", "commercial1": "Morgan", "commercial2": "", "commentaire": "Parti avec concurrence"}, {"projet": "Pugnac", "geo": "Pugnac", "statut": "KO", "commercial1": "Patrick", "commercial2": "", "commentaire": "KO"}, {"projet": "Netto Port-Sainte-Marie", "geo": "Netto Port-Sainte-Marie", "statut": "R1 fait", "commercial1": "Patrick", "commercial2": "", "commentaire": "Zone inondable en attente de plus d'info"}, {"projet": "La Teste-de-Buch HYPER", "geo": "La Teste-de-Buch HYPER", "statut": "R1 à caler", "commercial1": "Patrick", "commercial2": "", "commentaire": "Patrick va aller démarcher"}, {"projet": "La Teste-de-Buch SUPER", "geo": "La Teste-de-Buch SUPER", "statut": "R1 à caler", "commercial1": "Patrick", "commercial2": "", "commentaire": "patrick va recontacter"}, {"projet": "Netto Ales", "geo": "Netto Ales", "statut": "KO", "commercial1": "Valerian", "commercial2": "", "commentaire": "A voir pk KO"}, {"projet": "Aquila Johnson (Entre-deux-Guiers)", "geo": "Aquila Johnson (Entre-deux-Guiers)", "statut": "R1 fait", "commercial1": "Valerian", "commercial2": "", "commentaire": "pas rencontré l'adhérente sur le R1 mais la directrice en dessous d'elle, elle lui a fait remonter toutes les infos mais pas de retour de sa part, on n'aura pas de retour avant fin juillet"}, {"projet": "Oyonnax", "geo": "Oyonnax", "statut": "R1 difficile à caler", "commercial1": "Valerian", "commercial2": "", "commentaire": "client injoignable jamais sur le site - projet KO ??"}, {"projet": "Poligny", "geo": "Poligny", "statut": "Nouveau", "commercial1": "Jérémy L", "commercial2": "Valerian", "commentaire": "R1 le 10/09 ??"}, {"projet": "Brive-la-Gaillarde (Revellat)", "geo": "Brive-la-Gaillarde (Revellat)", "statut": "R1 fait", "commercial1": "Vincent", "commercial2": "", "commentaire": ""}, {"projet": "Bricomarché Creysse", "geo": "Bricomarché Creysse", "statut": "Nouveau", "commercial1": "Grégoire", "commercial2": "", "commentaire": "R1 le 27/08 ?? (toiture ?)"}, {"projet": "Saint-Dié-des-Vosges", "geo": "Saint-Dié-des-Vosges", "statut": "Nouveau", "commercial1": "Léo", "commercial2": "", "commentaire": "R1 le 24/09 ??"}, {"projet": "L'isle sur le Doubs", "geo": "L'isle sur le Doubs", "statut": "Nouveau", "commercial1": "Arthur V", "commercial2": "", "commentaire": "R1 le 03/09 ??"}, {"projet": "Le Cendre", "geo": "Le Cendre", "statut": "Nouveau", "commercial1": "Morgan", "commercial2": "", "commentaire": "R1 le 28/08 ??"}, {"projet": "Susmiou", "geo": "Susmiou", "statut": "Nouveau", "commercial1": "Patrick", "commercial2": "", "commentaire": "R1 le 10/09 ??"}, {"projet": "Chateaubriant", "geo": "Chateaubriant", "statut": "Nouveau", "commercial1": "François", "commercial2": "", "commentaire": "R1 ??"}, {"projet": "Saint-Marcel-sur-Aude", "geo": "Saint-Marcel-sur-Aude", "statut": "Nouveau", "commercial1": "Jérémy Delord", "commercial2": "", "commentaire": "R1 ??"}, {"projet": "Domfront en Poiraie", "geo": "Domfront en Poiraie", "statut": "Nouveau", "commercial1": "François", "commercial2": "", "commentaire": "R1 le 10/90 ??"}]};
+const GEO_OVERRIDES = {"BRICOMARCHE Clamecy": "Clamecy", "Dannemarie": "Dannemarie, Haut-Rhin", "INTERMARCHE CORMICY": "Cormicy", "Nanteuil-le-Haudoin": "Nanteuil-le-Haudouin", "Etréchy": "Étréchy, Essonne", "Angers": "Angers", "Saint-Rémy-des Monts": "Saint-Rémy-des-Monts", "Montluçon": "Montluçon", "Bellac": "Bellac", "Chagny": "Chagny", "Intermarché Saint-Maximin": "Saint-Maximin, Var", "Intermarché Garéoult": "Garéoult", "NETTO Villefontaine": "Villefontaine", "Lugrin": "Lugrin", "Givors": "Givors", "Bricomarché Montélier": "Montélier", "Nevers": "Nevers", "Ménesplet (Leoxime)": "Ménesplet", "Servas": "Servas, Ain", "Chazay d'Azergues": "Chazay-d'Azergues", "Bricomarche Ozoir-la-Ferrière": "Ozoir-la-Ferrière", "Troibecs": "", "Replonges": "Replonges", "Tullins": "Tullins", "La Fouillade": "La Fouillade", "Pugnac": "Pugnac", "Netto Port-Sainte-Marie": "Port-Sainte-Marie", "La Teste-de-Buch HYPER": "La Teste-de-Buch", "La Teste-de-Buch SUPER": "La Teste-de-Buch", "Netto Ales": "Alès", "Aquila Johnson (Entre-deux-Guiers)": "Entre-deux-Guiers", "Oyonnax": "Oyonnax", "Poligny": "Poligny", "Brive-la-Gaillarde (Revellat)": "Brive-la-Gaillarde (Revellat)", "Bricomarché Creysse": "Bricomarché Creysse", "Saint-Dié-des-Vosges": "Saint-Dié-des-Vosges", "L'isle sur le Doubs": "L'isle sur le Doubs", "Le Cendre": "Le Cendre", "Susmiou": "Susmiou", "Chateaubriant": "Chateaubriant", "Saint-Marcel-sur-Aude": "Saint-Marcel-sur-Aude", "Domfront en Poiraie": "Domfront en Poiraie", "Villers-les-Nancy toiture": "Villers-lès-Nancy", "Audincourt": "Audincourt", "Pont de Roide": "Pont-de-Roide", "Coudekerque": "Coudekerque-Branche", "Guise": "Guise", "Luxeuil les Bains": "Luxeuil-les-Bains", "Mourmelon-le-Grand": "Mourmelon-le-Grand", "Bazeilles": "Bazeilles", "Saint-Usage": "Saint-Usage", "Netto Genlis": "Netto Genlis", "Intermarché Genlis": "Intermarché Genlis", "Netto Mourmelon-le-Grand": "Netto Mourmelon-le-Grand", "Beaune": "Beaune", "Beauvoir-sur-Mer": "Beauvoir-sur-Mer", "Sainte Marie des Champs": "Sainte-Marie-des-Champs, Seine-Maritime", "Domarin": "Domarin, Isère", "Pleyben": "Pleyben", "Champagné": "Champagné, Sarthe", "Cholet": "Cholet", "Cholet espace Marne": "Cholet", "Netto Chateauneuf-les-Martigues": "Netto Chateauneuf-les-Martigues", "Le Bugue": "Le Bugue", "Tartas": "Tartas", "Saint Porchaire": "Saint-Porchaire", "Brioux sur Boutonne": "Brioux-sur-Boutonne", "Saint-Romain-le-Puy": "Saint-Romain-le-Puy", "Châtellerault": "Châtellerault", "Ste Maure de Touraine": "Sainte-Maure-de-Touraine", "Beauregard Le Mans": "Le Mans", "Combourg": "Combourg", "Plélan-le-Petit": "Plélan-le-Petit", "Chilly Mazarin": "Chilly-Mazarin", "Aixe sur Vienne": "Aixe-sur-Vienne", "Bricomarché Bollène": "Bollène", "Intermarché Nuits St Georges": "Nuits-Saint-Georges", "Netto Nuits St Georges": "Nuits-Saint-Georges", "Malissol": "Pont-Évêque, Isère", "Cochame (Coulounieix)": "Coulounieix-Chamiers", "Villers-les-Nancy ombrière": "Villers-lès-Nancy", "Chatillon-sur-Seine": "Châtillon-sur-Seine", "Rambervilliers": "Rambervillers", "Souzy": "Souzy", "Vernoux-en-Vivarais": "Vernoux-en-Vivarais", "St-Julien-Chapteuil": "Saint-Julien-Chapteuil", "Salignac": "Salignac-Eyvigues", "Intermarché Hautefort Pompadour": "Hautefort", "Coutras": "Coutras", "Sorgues": "Sorgues", "Saint-Amant-de-Boixe": "Saint-Amant-de-Boixe", "Gratentour": "Gratentour", "Saint-Paulien": "Saint-Paulien", "Asnans-Beauvoisin": "Asnans-Beauvoisin", "Chamboeuf": "Chamboeuf, Loire", "Bonneville": "Bonneville", "Saint-Sauveur": "Saint-Sauveur", "La Palisse": "La Palisse", "Trélissac": "Trélissac", "Venerque": "Venerque", "Bricomarché Rive de Gier": "Bricomarché Rive de Gier"};      // nom projet -> requête de géocodage (ville) pour repli
+const PRECISE_COORDS = {"Aixe sur Vienne": [45.791394, 1.136365], "Villers-les-Nancy toiture": [48.657347, 6.112173], "Villers-les-Nancy ombrière": [48.657347, 6.112173], "Bazeilles": [49.684967, 4.972102], "Coudekerque": [51.033747, 2.401821], "Guise": [49.901329, 3.633851], "Luxeuil les Bains": [47.809991, 6.361084], "Pleyben": [48.22121, -3.977837], "Beauvoir-sur-Mer": [46.909369, -2.031706], "Sainte Marie des Champs": [49.625506, 0.784474], "Cholet espace Marne": [47.05123, -0.885929], "Brioux sur Boutonne": [46.139655, -0.220709], "Domarin": [45.590495, 5.24244], "Champagné": [48.024225, 0.336671], "Netto Chateauneuf": [48.582241, 1.24288], "Saint Porchaire": [45.813733, -0.772938], "Saint-Romain-le-Puy": [45.554787, 4.119648], "Châtellerault": [46.840497, 0.546913], "Ste Maure de Touraine": [47.102593, 0.614762], "Beauregard Le Mans": [48.027928, 0.181746], "Combourg": [48.417844, -1.750335], "Plélan-le-Petit": [48.430542, -2.216825], "Chilly Mazarin": [48.704796, 2.296239], "Intermarché Nuits St Georges": [47.140499, 4.948871], "Netto Nuits St Georges": [47.137738, 4.956808], "Malissol": [45.518136, 4.919783], "Bricomarché Bollène": [44.31849, 4.744892], "Cochame (Coulounieix)": [45.170995, 0.688856], "Rambervilliers": [48.338284, 6.633387], "Chatillon-sur-Seine": [47.866832, 4.572726], "St-Julien-Chapteuil": [45.036326, 4.050262], "Salignac": [44.974529, 1.31454], "Intermarché Hautefort Pompadour": [45.2674, 1.138139], "Coutras": [45.048364, -0.122433], "Sorgues": [44.018612, 4.870549], "Asnans-Beauvoisin": [46.956658, 5.403814], "Chamboeuf": [45.583905, 4.303679], "Trélissac": [45.19812, 0.740408], "Venerque": [43.42931, 1.446678], "Le Bugue": [44.915028, 0.923277], "Pont de Roide": [47.389044, 6.768745], "Cholet": [47.05123, -0.885929], "Tartas": [43.833162, -0.811175], "Saint-Paulien": [45.132172, 3.814563], "BRICOMARCHE Clamecy": [47.474559, 3.516789], "Dannemarie": [47.631135, 7.110792], "INTERMARCHE CORMICY": [49.340411, 3.958664], "Nanteuil-le-Haudoin": [49.13621, 2.800516], "Etréchy": [48.488062, 2.187588], "Angers": [47.452288, -0.554166], "Saint-Rémy-des Monts": [48.342317, 0.369179], "Saint-Amant-de-Boixe": [45.804334, 0.139491], "Montluçon": [46.34064, 2.584856], "Bellac": [46.130198, 1.055219], "Chagny": [46.901602, 4.761381], "Intermarché Saint-Maximin": [43.447763, 5.863785], "Intermarché Garéoult": [43.331765, 6.057715], "INTERMARCHE Lapalisse et St Germain": [46.257145, 3.621916], "NETTO Villefontaine": [45.615568, 5.144046], "Lugrin": [46.40061, 6.654743], "Givors": [45.593274, 4.77141], "Bricomarché Montélier": [44.930035, 5.022044], "Ménesplet (Leoxime)": [45.006519, 0.146255], "Servas": [46.128527, 5.162362], "Chazay d'Azergues": [45.868034, 4.699541], "Bricomarche Ozoir-la-Ferrière": [48.75746, 2.700824], "Replonges": [46.299111, 4.880512], "Tullins": [45.297902, 5.486469], "La Fouillade": [44.237583, 2.033336], "Pugnac": [45.075672, -0.498183], "Netto Port-Sainte-Marie": [44.254644, 0.372309], "La Teste-de-Buch HYPER": [44.635899, -1.152813], "La Teste-de-Buch SUPER": [44.635899, -1.152813], "Netto Ales": [44.127757, 4.080658], "Oyonnax": [46.262456, 5.646694], "Audincourt": [47.486032, 6.84389], "Souzy": [45.69928, 4.45434], "Nevers": [46.9869429, 3.1725838], "Saint-Usage": [47.1104145, 5.2556831], "Vernoux-en-Vivarais": [44.897976, 4.647718], "Poligny": [46.83752, 5.68697]}; // nom projet -> [lat, lng] (repli si pas de coordonnées Excel)
+const FRANCE_SHAPE = {"type": "Feature", "properties": {"name": "France"}, "geometry": {"type": "MultiPolygon", "coordinates": [[[[-3.42179, 47.62], [-3.46262, 47.62017], [-3.51509, 47.64713], [-3.41513, 47.63228], [-3.42179, 47.62]]], [[[-4.00059, 47.70212], [-3.99277, 47.70827], [-3.99078, 47.70283], [-4.00059, 47.70212]]], [[[-3.95809, 47.71958], [-3.95084, 47.72051], [-3.957, 47.71206], [-3.95809, 47.71958]]], [[[-4.0124, 47.71644], [-4.00911, 47.71861], [-4.00718, 47.71696], [-4.0124, 47.71644]]], [[[-4.0004, 47.72283], [-4.00166, 47.7256], [-3.9976, 47.72519], [-4.0004, 47.72283]]], [[[-4.02052, 47.77678], [-4.02902, 47.77405], [-4.03075, 47.77509], [-4.02052, 47.77678]]], [[[-3.7995, 47.78458], [-3.80053, 47.78304], [-3.803, 47.78417], [-3.7995, 47.78458]]], [[[-4.1815, 47.84742], [-4.17666, 47.84074], [-4.18414, 47.846], [-4.1815, 47.84742]]], [[[-4.18667, 47.85019], [-4.18371, 47.85067], [-4.18354, 47.84875], [-4.18667, 47.85019]]], [[[-4.17993, 47.85206], [-4.18202, 47.86733], [-4.17693, 47.85213], [-4.17993, 47.85206]]], [[[-4.846, 48.03154], [-4.86754, 48.04386], [-4.85061, 48.04016], [-4.846, 48.03154]]], [[[-4.3392, 48.10301], [-4.33544, 48.10164], [-4.33721, 48.10015], [-4.3392, 48.10301]]], [[[-3.52401, 47.8449], [-3.54429, 47.85799], [-3.52759, 47.84401], [-3.53856, 47.83786], [-3.54144, 47.83122], [-3.5419, 47.82146], [-3.53511, 47.82063], [-3.53719, 47.81588], [-3.53573, 47.81297], [-3.52146, 47.80264], [-3.53143, 47.7911], [-3.53863, 47.76264], [-3.64607, 47.77466], [-3.64403, 47.78853], [-3.68084, 47.77679], [-3.72262, 47.80335], [-3.69697, 47.81902], [-3.64975, 47.82079], [-3.64117, 47.8284], [-3.69059, 47.82018], [-3.69552, 47.83106], [-3.73268, 47.80346], [-3.7418, 47.81237], [-3.74561, 47.83508], [-3.74899, 47.84514], [-3.75183, 47.84716], [-3.74196, 47.79748], [-3.85605, 47.78961], [-3.85458, 47.80399], [-3.90245, 47.83572], [-3.88063, 47.85916], [-3.90921, 47.85033], [-3.91937, 47.85637], [-3.90593, 47.85605], [-3.90084, 47.86237], [-3.93052, 47.87075], [-3.94745, 47.90024], [-3.97322, 47.8947], [-3.97729, 47.90968], [-3.99228, 47.89588], [-3.97711, 47.8538], [-4.03981, 47.84465], [-4.0883, 47.86206], [-4.04696, 47.85166], [-4.07895, 47.87661], [-4.09936, 47.8625], [-4.14474, 47.90934], [-4.13871, 47.92587], [-4.13127, 47.92543], [-4.13026, 47.93026], [-4.11633, 47.93058], [-4.10979, 47.93636], [-4.10942, 47.94211], [-4.10395, 47.9397], [-4.09932, 47.94303], [-4.09571, 47.93827], [-4.07899, 47.93652], [-4.07775, 47.93736], [-4.09488, 47.94129], [-4.08364, 47.95151], [-4.10949, 47.94269], [-4.09522, 47.96717], [-4.11717, 47.9835], [-4.101, 47.97054], [-4.12213, 47.95318], [-4.1108, 47.93644], [-4.13061, 47.93151], [-4.13332, 47.92567], [-4.14078, 47.92634], [-4.15092, 47.91058], [-4.14561, 47.89738], [-4.17633, 47.90713], [-4.13041, 47.88997], [-4.11331, 47.86204], [-4.16981, 47.83949], [-4.17883, 47.87897], [-4.19565, 47.87613], [-4.19784, 47.85864], [-4.20676, 47.86622], [-4.21142, 47.86762], [-4.21565, 47.86603], [-4.18319, 47.83612], [-4.15884, 47.83154], [-4.18298, 47.80022], [-4.2168, 47.81208], [-4.21921, 47.7921], [-4.37419, 47.79798], [-4.38063, 47.82017], [-4.34604, 47.84021], [-4.38359, 47.92086], [-4.4509, 47.98105], [-4.53671, 48.01164], [-4.53113, 48.0349], [-4.48818, 48.03845], [-4.53971, 48.03828], [-4.53547, 48.01713], [-4.56475, 47.99983], [-4.63296, 48.02937], [-4.69727, 48.02615], [-4.7408, 48.04058], [-4.70788, 48.04406], [-4.7143, 48.06435], [-4.55163, 48.07634], [-4.41613, 48.10672], [-4.36249, 48.10926], [-4.33347, 48.08457], [-4.32758, 48.09966], [-4.30439, 48.08943], [-4.26898, 48.13343], [-4.27308, 48.15418], [-4.29538, 48.1583], [-4.29118, 48.17573], [-4.31612, 48.20382], [-4.36907, 48.20505], [-4.46391, 48.23938], [-4.50165, 48.23042], [-4.4973, 48.21677], [-4.55413, 48.16777], [-4.55205, 48.20839], [-4.57156, 48.23147], [-4.54329, 48.24908], [-4.62331, 48.25323], [-4.6151, 48.27248], [-4.62944, 48.2808], [-4.56992, 48.28194], [-4.5826, 48.31941], [-4.53443, 48.34186], [-4.55959, 48.30565], [-4.53577, 48.28394], [-4.4993, 48.31117], [-4.51791, 48.29532], [-4.5026, 48.28086], [-4.41911, 48.29313], [-4.4099, 48.27603], [-4.38543, 48.27514], [-4.27236, 48.29601], [-4.26565, 48.28459], [-4.28252, 48.28891], [-4.28902, 48.27425], [-4.25573, 48.26358], [-4.26619, 48.25733], [-4.2439, 48.24966], [-4.2177, 48.25818], [-4.21487, 48.24841], [-4.2087, 48.24197], [-4.13541, 48.23622], [-4.11357, 48.24456], [-4.11685, 48.21828], [-4.09695, 48.25554], [-4.13485, 48.24144], [-4.21672, 48.261], [-4.23841, 48.25367], [-4.28014, 48.27863], [-4.18834, 48.29689], [-4.23859, 48.29952], [-4.22671, 48.31357], [-4.24739, 48.29901], [-4.2819, 48.31247], [-4.24916, 48.32684], [-4.33587, 48.31574], [-4.26452, 48.35818], [-4.33004, 48.33865], [-4.31848, 48.36218], [-4.35546, 48.34332], [-4.34655, 48.35473], [-4.37818, 48.3255], [-4.41524, 48.32423], [-4.39721, 48.3422], [-4.45739, 48.32707], [-4.40753, 48.38054], [-4.31029, 48.41736], [-4.27914, 48.43562], [-4.27009, 48.44504], [-4.40169, 48.3896], [-4.43068, 48.39744], [-4.43727, 48.3825], [-4.48385, 48.38263], [-4.60872, 48.33789], [-4.68056, 48.35561], [-4.71114, 48.33076], [-4.76904, 48.32834], [-4.78072, 48.35859], [-4.75064, 48.36012], [-4.74608, 48.36565], [-4.7864, 48.3613], [-4.76069, 48.37817], [-4.79542, 48.41466], [-4.76457, 48.46687], [-4.71963, 48.4756], [-4.76252, 48.4721], [-4.77603, 48.51917], [-4.74798, 48.52798], [-4.75296, 48.54392], [-4.73058, 48.55635], [-4.70394, 48.55132], [-4.70441, 48.57003], [-4.62782, 48.57892], [-4.59663, 48.57158], [-4.59067, 48.55452], [-4.50535, 48.5459], [-4.61227, 48.57825], [-4.59831, 48.60801], [-4.58568, 48.60192], [-4.59531, 48.59329], [-4.54352, 48.5983], [-4.52142, 48.58461], [-4.47845, 48.57298], [-4.56828, 48.60907], [-4.54376, 48.63649], [-4.5013, 48.62094], [-4.44087, 48.64133], [-4.39881, 48.63602], [-4.39791, 48.63806], [-4.40463, 48.64128], [-4.43252, 48.64751], [-4.43656, 48.65472], [-4.32979, 48.67712], [-4.29407, 48.66174], [-4.31811, 48.64635], [-4.29694, 48.63264], [-4.27446, 48.64953], [-4.196, 48.65222], [-4.22211, 48.65857], [-4.18639, 48.68649], [-4.12932, 48.69688], [-4.08091, 48.69295], [-4.05726, 48.67083], [-4.05679, 48.70063], [-4.00691, 48.7264], [-4.0009, 48.7118], [-3.98918, 48.72685], [-3.96506, 48.72177], [-3.9715, 48.67409], [-3.94998, 48.67262], [-3.95655, 48.6168], [-3.93894, 48.60072], [-3.95132, 48.65021], [-3.92209, 48.67551], [-3.89111, 48.67089], [-3.90469, 48.65684], [-3.85858, 48.62954], [-3.86773, 48.60406], [-3.85152, 48.6067], [-3.84598, 48.62676], [-3.81661, 48.62859], [-3.84543, 48.62892], [-3.86426, 48.67133], [-3.84626, 48.66018], [-3.85443, 48.68928], [-3.83093, 48.7119], [-3.82078, 48.70135], [-3.82095, 48.71822], [-3.68031, 48.68668], [-3.64327, 48.69591], [-3.65478, 48.6824], [-3.63926, 48.67334], [-3.65512, 48.66534], [-3.65914, 48.65921], [-3.63499, 48.67122], [-3.62405, 48.68624], [-3.60967, 48.66966], [-3.57298, 48.67492], [-3.5843, 48.71853], [-3.55537, 48.72751], [-3.54959, 48.74667], [-3.58499, 48.75701], [-3.58593, 48.77739], [-3.567, 48.7979], [-3.53518, 48.80203], [-3.54133, 48.82268], [-3.51957, 48.81898], [-3.52567, 48.83003], [-3.50352, 48.8387], [-3.50306, 48.82429], [-3.48081, 48.83784], [-3.46037, 48.81678], [-3.42823, 48.82039], [-3.44056, 48.79831], [-3.39754, 48.80075], [-3.32206, 48.83803], [-3.26433, 48.8342], [-3.22448, 48.86992], [-3.20601, 48.84739], [-3.21827, 48.83529], [-3.20273, 48.83492], [-3.23669, 48.78876], [-3.21969, 48.78378], [-3.18282, 48.84377], [-3.07417, 48.88202], [-3.10145, 48.86662], [-3.08513, 48.86735], [-3.07595, 48.85774], [-3.0935, 48.86069], [-3.08417, 48.84725], [-3.09751, 48.83241], [-3.07162, 48.83057], [-3.12348, 48.76008], [-3.09765, 48.76893], [-3.10418, 48.78048], [-3.07277, 48.82042], [-3.00899, 48.81965], [-3.00493, 48.799], [-3.0464, 48.78557], [-3.00994, 48.78215], [-3.02874, 48.77801], [-3.01581, 48.76632], [-2.9516, 48.77167], [-2.92846, 48.75475], [-2.9451, 48.72081], [-2.82653, 48.65536], [-2.81413, 48.61023], [-2.82386, 48.59721], [-2.71427, 48.55564], [-2.72111, 48.53131], [-2.68157, 48.4917], [-2.68209, 48.53201], [-2.63029, 48.52609], [-2.55288, 48.59953], [-2.47343, 48.62252], [-2.46813, 48.63581], [-2.48786, 48.64515], [-2.43772, 48.65281], [-2.41709, 48.63309], [-2.31772, 48.68865], [-2.31273, 48.67214], [-2.28521, 48.66448], [-2.33592, 48.62001], [-2.31521, 48.60997], [-2.24742, 48.64605], [-2.25473, 48.63261], [-2.21408, 48.59294], [-2.21286, 48.57276], [-2.19155, 48.59231], [-2.1951, 48.60902], [-2.17686, 48.57623], [-2.14895, 48.61855], [-2.12371, 48.60441], [-2.15067, 48.63474], [-2.04732, 48.63788], [-2.05373, 48.62569], [-2.03364, 48.62674], [-2.03087, 48.60443], [-1.99578, 48.58266], [-2.01299, 48.57065], [-1.97372, 48.54413], [-1.9928, 48.52332], [-1.98243, 48.50058], [-1.99484, 48.49757], [-2.00166, 48.49173], [-1.98162, 48.49835], [-1.96473, 48.52633], [-1.9525, 48.51828], [-1.94818, 48.51917], [-1.94804, 48.53881], [-1.9694, 48.53655], [-1.96307, 48.55594], [-1.97753, 48.55695], [-1.98704, 48.58451], [-1.95419, 48.57898], [-1.96292, 48.59287], [-2.01334, 48.59951], [-2.00118, 48.61515], [-2.01513, 48.61398], [-2.02858, 48.65031], [-1.98882, 48.66457], [-1.98848, 48.68414], [-1.93807, 48.68398], [-1.95944, 48.69054], [-1.93712, 48.70234], [-1.9047, 48.68995], [-1.84512, 48.71175], [-1.8358, 48.6803], [-1.86272, 48.66728], [-1.8687, 48.63811], [-1.84052, 48.61406], [-1.76771, 48.60239], [-1.54354, 48.63121], [-1.51194, 48.61321], [-1.44869, 48.62348], [-1.42493, 48.64358], [-1.35175, 48.63122], [-1.39961, 48.65553], [-1.39842, 48.66409], [-1.37599, 48.68507], [-1.37611, 48.69039], [-1.44577, 48.65477], [-1.44929, 48.67], [-1.50494, 48.6874], [-1.52928, 48.73012], [-1.57101, 48.74422], [-1.57444, 48.82168], [-1.61443, 48.83422], [-1.58484, 48.84893], [-1.56434, 48.92158], [-1.55324, 48.93421], [-1.56063, 48.91333], [-1.55452, 48.89391], [-1.54993, 48.89636], [-1.55681, 49.02665], [-1.53452, 49.03406], [-1.50553, 49.02037], [-1.54256, 49.04132], [-1.56013, 49.03671], [-1.57623, 49.00041], [-1.59888, 49.03737], [-1.60883, 49.1056], [-1.58107, 49.13167], [-1.61363, 49.21876], [-1.56856, 49.22164], [-1.61469, 49.23795], [-1.62552, 49.21006], [-1.67839, 49.28207], [-1.65736, 49.28182], [-1.6853, 49.2885], [-1.71117, 49.3251], [-1.69784, 49.32453], [-1.6746, 49.33201], [-1.71942, 49.32498], [-1.7871, 49.37459], [-1.75692, 49.36819], [-1.75865, 49.37336], [-1.77155, 49.38002], [-1.80916, 49.3721], [-1.84817, 49.50375], [-1.88661, 49.52635], [-1.839, 49.5764], [-1.84584, 49.62154], [-1.87235, 49.65732], [-1.94689, 49.67454], [-1.94219, 49.7261], [-1.88291, 49.70571], [-1.85179, 49.7184], [-1.82286, 49.69031], [-1.61545, 49.65818], [-1.63124, 49.65367], [-1.61516, 49.64346], [-1.5999, 49.66073], [-1.54182, 49.65404], [-1.48693, 49.66852], [-1.47326, 49.69701], [-1.37099, 49.7073], [-1.2662, 49.69542], [-1.2721, 49.67944], [-1.23913, 49.65364], [-1.22866, 49.60607], [-1.25429, 49.61266], [-1.27212, 49.57069], [-1.26975, 49.58383], [-1.29623, 49.58317], [-1.30747, 49.54178], [-1.17115, 49.41252], [-1.16173, 49.39175], [-1.17754, 49.36489], [-1.13605, 49.35404], [-1.11554, 49.3515], [-1.07267, 49.38997], [-0.94723, 49.39581], [-0.75529, 49.34891], [-0.39661, 49.333], [-0.22569, 49.28182], [-0.08717, 49.29791], [0.01061, 49.33061], [0.12975, 49.40299], [0.22358, 49.42812], [0.34059, 49.43432], [0.33932, 49.44987], [0.27314, 49.45341], [0.27204, 49.44245], [0.12125, 49.46319], [0.06655, 49.51007], [0.15201, 49.64324], [0.16423, 49.68646], [0.20599, 49.71419], [0.33666, 49.74677], [0.58353, 49.85262], [0.79097, 49.87575], [0.9593, 49.91951], [1.02887, 49.91711], [1.19452, 49.96803], [1.44344, 50.1005], [1.49168, 50.18416], [1.54843, 50.21522], [1.56474, 50.21722], [1.5962, 50.1855], [1.68162, 50.18078], [1.66267, 50.2136], [1.62329, 50.21412], [1.59223, 50.25646], [1.55074, 50.25929], [1.53843, 50.27858], [1.55583, 50.36132], [1.62426, 50.36629], [1.62668, 50.36002], [1.64154, 50.35215], [1.62523, 50.37183], [1.58315, 50.3762], [1.55566, 50.39768], [1.58298, 50.5346], [1.58855, 50.53935], [1.63729, 50.50967], [1.65917, 50.50778], [1.6265, 50.52004], [1.57661, 50.57223], [1.5625, 50.7244], [1.60254, 50.7216], [1.59129, 50.73049], [1.6056, 50.7676], [1.58185, 50.87104], [1.6421, 50.87887], [1.71226, 50.92941], [1.78072, 50.95487], [2.07774, 51.00792], [2.12206, 50.99048], [2.1081, 51.00416], [2.15036, 51.03433], [2.17966, 51.00738], [2.19025, 51.01804], [2.17511, 51.02327], [2.19554, 51.03562], [2.19125, 51.04028], [2.18191, 51.03992], [2.17142, 51.04434], [2.19516, 51.04029], [2.21401, 51.03168], [2.34954, 51.06059], [2.39523, 51.05033], [2.54554, 51.089], [2.57399, 51.00352], [2.6069, 50.99091], [2.63269, 50.94601], [2.59001, 50.9191], [2.60795, 50.91008], [2.61195, 50.86341], [2.59906, 50.84875], [2.61541, 50.84827], [2.63498, 50.81276], [2.66932, 50.82246], [2.7239, 50.81012], [2.72582, 50.79245], [2.78336, 50.75091], [2.78958, 50.72626], [2.84838, 50.72292], [2.90607, 50.69232], [2.95048, 50.75129], [3.0147, 50.77404], [3.08871, 50.77337], [3.11092, 50.79412], [3.15079, 50.79012], [3.20511, 50.71245], [3.26117, 50.70128], [3.26485, 50.67612], [3.24011, 50.65856], [3.27947, 50.59564], [3.28874, 50.52553], [3.37622, 50.49108], [3.45008, 50.50723], [3.47439, 50.53361], [3.51991, 50.52332], [3.50098, 50.487], [3.60835, 50.49673], [3.66233, 50.45617], [3.67484, 50.40186], [3.65715, 50.36926], [3.71043, 50.30317], [3.70912, 50.31897], [3.73056, 50.31012], [3.7474, 50.35093], [3.84741, 50.3531], [3.90005, 50.32728], [4.02371, 50.35889], [4.07889, 50.30975], [4.11712, 50.30405], [4.13538, 50.25719], [4.16761, 50.2597], [4.14956, 50.27466], [4.16268, 50.28892], [4.20796, 50.273], [4.2207, 50.2522], [4.15164, 50.21346], [4.15567, 50.16425], [4.12693, 50.13501], [4.19704, 50.13531], [4.19763, 50.10702], [4.23078, 50.07334], [4.19398, 50.04921], [4.16222, 50.04898], [4.13578, 50.01939], [4.16313, 49.99477], [4.1409, 49.97876], [4.19711, 49.96772], [4.19632, 49.9553], [4.30874, 49.9697], [4.44694, 49.9375], [4.52326, 49.95041], [4.58208, 49.98357], [4.69358, 49.99552], [4.68465, 50.02724], [4.69967, 50.05356], [4.68018, 50.06645], [4.69302, 50.08482], [4.82507, 50.16912], [4.83224, 50.15323], [4.87601, 50.15391], [4.89708, 50.13779], [4.86718, 50.1187], [4.87213, 50.08773], [4.85089, 50.10132], [4.83793, 50.06711], [4.81931, 50.06588], [4.84132, 50.04], [4.79011, 49.97002], [4.79092, 49.9584], [4.84711, 49.94902], [4.88998, 49.90927], [4.8512, 49.86499], [4.87693, 49.8194], [4.85148, 49.79355], [4.90574, 49.78548], [4.99536, 49.80061], [5.01355, 49.78009], [5.0935, 49.76373], [5.12564, 49.71238], [5.15822, 49.71682], [5.16621, 49.69292], [5.27067, 49.69532], [5.332, 49.65478], [5.30491, 49.63006], [5.31208, 49.61166], [5.35151, 49.63079], [5.42855, 49.59587], [5.43797, 49.56974], [5.45681, 49.56667], [5.44135, 49.55214], [5.46507, 49.53887], [5.4472, 49.51788], [5.46519, 49.4989], [5.55605, 49.52925], [5.61098, 49.50593], [5.64298, 49.54997], [5.74738, 49.53943], [5.77145, 49.56325], [5.8172, 49.537], [5.83696, 49.54247], [5.83657, 49.51962], [5.86385, 49.50083], [5.94311, 49.50023], [5.97238, 49.49112], [5.97417, 49.46482], [5.98765, 49.46241], [5.979, 49.45292], [6.04215, 49.4478], [6.05777, 49.46621], [6.10081, 49.45289], [6.12786, 49.49374], [6.16217, 49.49323], [6.15525, 49.50381], [6.24071, 49.51451], [6.33378, 49.46689], [6.36886, 49.45982], [6.42809, 49.47692], [6.5419, 49.43244], [6.55704, 49.41909], [6.54053, 49.40115], [6.60183, 49.36647], [6.56584, 49.34735], [6.61574, 49.30168], [6.67037, 49.28029], [6.66153, 49.25733], [6.68976, 49.24969], [6.69593, 49.21501], [6.72334, 49.21905], [6.7315, 49.20609], [6.71136, 49.18854], [6.73851, 49.16366], [6.78456, 49.16809], [6.83454, 49.15147], [6.86177, 49.17944], [6.83778, 49.21332], [6.86313, 49.22197], [6.89244, 49.20883], [6.92545, 49.22359], [7.03503, 49.19064], [7.02765, 49.17008], [7.0543, 49.11263], [7.08888, 49.13022], [7.08028, 49.14877], [7.10093, 49.15562], [7.11327, 49.15169], [7.10391, 49.13892], [7.1588, 49.12078], [7.2453, 49.12981], [7.29374, 49.1151], [7.32371, 49.14269], [7.36326, 49.14525], [7.36609, 49.17247], [7.44478, 49.18423], [7.43264, 49.16588], [7.494, 49.16964], [7.5064, 49.15492], [7.48958, 49.13653], [7.52898, 49.09721], [7.62935, 49.07368], [7.63529, 49.05416], [7.75818, 49.04534], [7.79459, 49.06579], [7.8663, 49.0334], [7.88823, 49.04862], [7.9167, 49.04097], [7.93376, 49.05803], [7.9747, 49.02697], [8.04922, 49.01418], [8.08691, 48.99054], [8.23334, 48.96668], [8.1958, 48.95621], [8.14794, 48.90381], [8.08912, 48.80363], [8.02913, 48.78648], [8.01471, 48.76118], [7.97176, 48.75763], [7.96314, 48.72135], [7.83982, 48.64137], [7.8004, 48.58454], [7.8052, 48.51357], [7.7682, 48.48966], [7.73355, 48.39869], [7.74466, 48.32784], [7.69338, 48.30153], [7.66602, 48.22088], [7.57731, 48.12037], [7.56869, 48.03411], [7.62209, 47.97227], [7.58329, 47.93112], [7.58187, 47.89649], [7.5567, 47.87994], [7.56311, 47.84379], [7.52963, 47.77891], [7.54767, 47.72992], [7.51185, 47.69704], [7.52114, 47.66373], [7.59103, 47.60474], [7.58489, 47.57563], [7.5, 47.53979], [7.5312, 47.52663], [7.52294, 47.51424], [7.4978, 47.52123], [7.51098, 47.49666], [7.48686, 47.48173], [7.43185, 47.49607], [7.42111, 47.48045], [7.45566, 47.4705], [7.38558, 47.43162], [7.33071, 47.44157], [7.24618, 47.42022], [7.23281, 47.43881], [7.17077, 47.44305], [7.20105, 47.49391], [7.12799, 47.50349], [7.07589, 47.48819], [7.02102, 47.50439], [6.98251, 47.4935], [7.0019, 47.45394], [6.94054, 47.43337], [6.93838, 47.40602], [6.91446, 47.40413], [6.87927, 47.35245], [7.01556, 47.37279], [7.04825, 47.36218], [7.05675, 47.33457], [7.00973, 47.32436], [7.01614, 47.3136], [6.99706, 47.29585], [6.94088, 47.28667], [6.95541, 47.24329], [6.84117, 47.17126], [6.85819, 47.16543], [6.85017, 47.15662], [6.70279, 47.08158], [6.69167, 47.06651], [6.71861, 47.05084], [6.61733, 46.99164], [6.49669, 46.97418], [6.43267, 46.9286], [6.46458, 46.89021], [6.46006, 46.85168], [6.431, 46.81241], [6.45857, 46.7885], [6.45222, 46.77413], [6.28197, 46.69063], [6.11162, 46.5776], [6.15645, 46.54547], [6.07268, 46.4657], [6.08635, 46.44372], [6.06401, 46.41623], [6.17022, 46.36648], [6.10237, 46.28485], [6.12425, 46.25101], [5.97474, 46.21512], [5.96368, 46.19696], [5.99529, 46.18299], [5.95606, 46.13209], [5.99278, 46.14442], [6.03671, 46.13646], [6.05204, 46.1514], [6.13618, 46.14153], [6.22187, 46.2006], [6.29447, 46.22492], [6.30953, 46.25625], [6.29488, 46.26459], [6.26662, 46.24747], [6.23758, 46.27775], [6.25767, 46.32551], [6.30521, 46.36676], [6.34468, 46.37001], [6.38911, 46.34012], [6.51307, 46.40479], [6.54388, 46.39482], [6.72387, 46.40796], [6.80531, 46.39414], [6.77199, 46.35031], [6.86449, 46.27961], [6.80366, 46.20435], [6.8127, 46.18164], [6.79198, 46.16223], [6.79654, 46.13862], [6.89993, 46.1239], [6.87558, 46.04774], [6.93791, 46.06328], [6.9851, 46.00465], [7.01048, 45.99738], [7.02321, 45.97847], [7.00901, 45.96897], [7.03761, 45.9543], [7.04507, 45.92245], [7.01831, 45.91437], [6.99145, 45.86798], [6.94137, 45.84693], [6.87914, 45.84915], [6.86738, 45.82409], [6.84436, 45.84046], [6.81889, 45.8362], [6.80084, 45.78078], [6.81725, 45.7403], [6.80842, 45.72515], [6.8563, 45.68551], [6.90253, 45.68094], [6.91483, 45.65173], [7.00069, 45.6399], [6.97801, 45.58718], [6.997, 45.5689], [7.00033, 45.50442], [7.05457, 45.49497], [7.04799, 45.47344], [7.10303, 45.46845], [7.11435, 45.43349], [7.18589, 45.40323], [7.16302, 45.38092], [7.16451, 45.36066], [7.11117, 45.32694], [7.13759, 45.25569], [7.07994, 45.21276], [7.04721, 45.22581], [6.96575, 45.20795], [6.94713, 45.17076], [6.89161, 45.16704], [6.89235, 45.13682], [6.84789, 45.1272], [6.76795, 45.15974], [6.74002, 45.13674], [6.68007, 45.14012], [6.62671, 45.10376], [6.66211, 45.07164], [6.67388, 45.01962], [6.7454, 45.0143], [6.75169, 44.99663], [6.73785, 44.98923], [6.76525, 44.96197], [6.74414, 44.93721], [6.7609, 44.9332], [6.75071, 44.90565], [6.86324, 44.85061], [6.91316, 44.84499], [6.93121, 44.86353], [7.00677, 44.83932], [7.02384, 44.82307], [6.9994, 44.78968], [7.02229, 44.77079], [7.02991, 44.72976], [7.06602, 44.71333], [7.07559, 44.6903], [7.07163, 44.67948], [7.03031, 44.6914], [6.96318, 44.67811], [6.94769, 44.65368], [6.96837, 44.6198], [6.94926, 44.61918], [6.91498, 44.55884], [6.87856, 44.55434], [6.8534, 44.52881], [6.87737, 44.48079], [6.94809, 44.4297], [6.89287, 44.42078], [6.88743, 44.36105], [6.92257, 44.35073], [6.96053, 44.31085], [6.95753, 44.29511], [6.99572, 44.27988], [7.00852, 44.23524], [7.18613, 44.20135], [7.28136, 44.14087], [7.34467, 44.14474], [7.358, 44.11602], [7.39289, 44.12503], [7.42475, 44.11193], [7.42979, 44.12975], [7.56482, 44.15517], [7.62005, 44.14951], [7.63662, 44.1771], [7.68059, 44.1761], [7.66656, 44.13112], [7.71881, 44.08253], [7.71444, 44.06122], [7.66225, 44.02822], [7.67044, 43.99826], [7.65244, 43.97371], [7.56938, 43.94742], [7.56195, 43.89974], [7.49788, 43.87165], [7.53016, 43.78805], [7.49021, 43.7672], [7.48683, 43.749], [7.45782, 43.7596], [7.40575, 43.71937], [7.35587, 43.72073], [7.3298, 43.70247], [7.34974, 43.68701], [7.3313, 43.67452], [7.31472, 43.70653], [7.30402, 43.68483], [7.28417, 43.69782], [7.24065, 43.68777], [7.21162, 43.64732], [7.15698, 43.65349], [7.1218, 43.58704], [7.14056, 43.56893], [7.13637, 43.54458], [7.119, 43.54289], [7.12175, 43.5595], [7.09626, 43.57089], [7.03773, 43.53471], [7.01657, 43.55077], [6.96333, 43.54216], [6.93837, 43.51639], [6.95705, 43.5008], [6.93109, 43.48364], [6.92398, 43.4505], [6.89167, 43.42845], [6.85974, 43.43325], [6.85631, 43.41152], [6.74549, 43.41789], [6.71407, 43.37179], [6.71655, 43.3475], [6.68003, 43.3403], [6.67131, 43.3126], [6.58387, 43.2773], [6.59347, 43.26226], [6.64017, 43.27436], [6.66521, 43.26489], [6.6758, 43.27849], [6.69763, 43.26647], [6.66443, 43.24135], [6.66429, 43.21183], [6.68109, 43.19982], [6.64305, 43.1871], [6.64664, 43.16771], [6.61829, 43.15942], [6.60173, 43.18209], [6.562, 43.18909], [6.49664, 43.15119], [6.38445, 43.14402], [6.35976, 43.1199], [6.36435, 43.08631], [6.32152, 43.09139], [6.27494, 43.12074], [6.20103, 43.11606], [6.15475, 43.07984], [6.15204, 43.03718], [6.17266, 43.03282], [6.14877, 43.0259], [6.09126, 43.03536], [6.13161, 43.04801], [6.11399, 43.08366], [6.02154, 43.07826], [6.02347, 43.09481], [6.00546, 43.10396], [5.92568, 43.10231], [5.93433, 43.1186], [5.92063, 43.12391], [5.88054, 43.105], [5.90999, 43.09992], [5.89679, 43.08048], [5.9382, 43.08456], [5.94704, 43.06775], [5.8902, 43.07804], [5.859, 43.04802], [5.82881, 43.04936], [5.79239, 43.06869], [5.8125, 43.09587], [5.80821, 43.11519], [5.76734, 43.11554], [5.78096, 43.13012], [5.77125, 43.13893], [5.69488, 43.14359], [5.68674, 43.17968], [5.62417, 43.18698], [5.60414, 43.16035], [5.56929, 43.17488], [5.53569, 43.21417], [5.49987, 43.19689], [5.45893, 43.21119], [5.34182, 43.21257], [5.37605, 43.25516], [5.34546, 43.28161], [5.37348, 43.29418], [5.36024, 43.29567], [5.36406, 43.3141], [5.35107, 43.33471], [5.3142, 43.36003], [5.22938, 43.32873], [5.05019, 43.32495], [5.01988, 43.34233], [5.02528, 43.35553], [4.98685, 43.39224], [5.00107, 43.39822], [4.97477, 43.40122], [4.97, 43.42488], [4.91933, 43.43091], [4.8935, 43.40412], [4.88472, 43.41372], [4.90342, 43.42966], [4.88222, 43.41928], [4.86083, 43.45398], [4.85025, 43.4508], [4.87731, 43.41051], [4.82444, 43.42439], [4.86147, 43.40077], [4.84154, 43.4036], [4.83868, 43.39453], [4.87183, 43.39004], [4.82891, 43.37589], [4.88305, 43.3565], [4.91753, 43.37989], [4.85505, 43.33262], [4.75879, 43.35004], [4.65913, 43.34625], [4.56075, 43.37397], [4.55743, 43.38832], [4.59296, 43.40994], [4.54729, 43.44862], [4.19455, 43.46554], [4.1272, 43.48945], [4.11651, 43.5083], [4.13912, 43.5319], [4.10449, 43.55337], [3.96858, 43.54002], [3.86483, 43.49474], [3.79666, 43.44104], [3.72492, 43.41579], [3.72563, 43.40119], [3.64313, 43.38314], [3.50951, 43.27172], [3.40855, 43.2887], [3.28712, 43.24199], [3.18068, 43.16827], [3.10718, 43.08917], [3.04252, 42.95899], [3.03963, 42.93129], [3.06071, 42.91742], [3.03983, 42.71103], [3.02447, 42.70388], [3.03895, 42.70121], [3.05184, 42.54395], [3.1411, 42.51521], [3.12334, 42.50594], [3.13561, 42.49969], [3.12754, 42.48732], [3.15514, 42.47745], [3.17703, 42.43867], [3.0861, 42.42519], [3.04046, 42.47439], [2.96735, 42.46536], [2.94709, 42.4818], [2.91845, 42.45608], [2.87031, 42.46734], [2.83954, 42.45929], [2.79924, 42.41857], [2.73345, 42.42445], [2.67394, 42.4047], [2.67142, 42.38753], [2.65149, 42.38641], [2.6749, 42.35705], [2.67013, 42.34073], [2.57086, 42.35795], [2.54213, 42.33366], [2.48356, 42.33965], [2.43346, 42.37709], [2.43246, 42.39326], [2.25672, 42.43844], [2.20161, 42.41638], [2.15088, 42.42113], [2.08463, 42.36177], [2.01541, 42.34678], [1.96474, 42.38164], [1.93688, 42.45359], [1.89136, 42.44779], [1.82352, 42.48624], [1.73067, 42.49275], [1.72181, 42.51704], [1.73453, 42.54908], [1.78661, 42.57431], [1.72612, 42.58969], [1.73607, 42.61715], [1.60205, 42.62548], [1.56239, 42.65348], [1.49375, 42.65321], [1.46991, 42.63565], [1.47423, 42.61089], [1.43783, 42.60321], [1.41366, 42.65552], [1.38778, 42.66837], [1.38933, 42.68679], [1.35124, 42.70266], [1.35738, 42.71941], [1.25316, 42.71463], [1.22911, 42.72772], [1.16593, 42.70871], [1.07908, 42.78828], [0.98649, 42.78652], [0.96013, 42.80574], [0.92612, 42.7891], [0.85831, 42.82572], [0.70838, 42.8614], [0.65901, 42.83853], [0.67057, 42.80543], [0.64539, 42.78354], [0.66681, 42.7754], [0.64198, 42.75468], [0.68003, 42.72347], [0.67647, 42.69101], [0.59732, 42.70584], [0.58916, 42.69495], [0.42275, 42.69082], [0.3601, 42.72429], [0.29514, 42.67316], [0.26346, 42.69324], [0.25988, 42.71581], [0.17573, 42.737], [-0.01658, 42.68489], [-0.05981, 42.69343], [-0.06884, 42.7179], [-0.1068, 42.7205], [-0.16087, 42.79832], [-0.18942, 42.7866], [-0.31344, 42.84938], [-0.39494, 42.79892], [-0.44348, 42.79592], [-0.50542, 42.82728], [-0.52973, 42.79153], [-0.56693, 42.78053], [-0.56602, 42.80379], [-0.60076, 42.80631], [-0.60363, 42.83262], [-0.67841, 42.8844], [-0.73185, 42.89605], [-0.73057, 42.94549], [-0.75296, 42.96771], [-0.81477, 42.95104], [-0.90757, 42.96428], [-0.94383, 42.95319], [-1.01659, 42.99468], [-1.07418, 42.99861], [-1.11471, 43.02386], [-1.14221, 43.00798], [-1.1641, 43.03486], [-1.23016, 43.05538], [-1.26298, 43.04339], [-1.30928, 43.06865], [-1.27019, 43.11857], [-1.32061, 43.11275], [-1.34511, 43.09402], [-1.3537, 43.02824], [-1.44122, 43.04631], [-1.47321, 43.08676], [-1.41478, 43.12789], [-1.40202, 43.17787], [-1.38174, 43.18963], [-1.38854, 43.25856], [-1.53532, 43.29464], [-1.56472, 43.28791], [-1.57661, 43.24988], [-1.60867, 43.25191], [-1.63037, 43.28445], [-1.62407, 43.30607], [-1.66853, 43.31486], [-1.72975, 43.29568], [-1.73771, 43.3304], [-1.78713, 43.35137], [-1.79235, 43.3706], [-1.74896, 43.38777], [-1.66553, 43.38932], [-1.60453, 43.43039], [-1.4482, 43.64228], [-1.30648, 44.17062], [-1.25483, 44.45729], [-1.26019, 44.54317], [-1.21214, 44.59951], [-1.19524, 44.65719], [-1.14229, 44.65925], [-1.14916, 44.64002], [-1.03926, 44.65378], [-1.03591, 44.64874], [-1.02218, 44.6421], [-1.00362, 44.64836], [-1.01939, 44.67821], [-1.06928, 44.69624], [-1.03742, 44.69232], [-1.05128, 44.70578], [-1.16756, 44.77604], [-1.17381, 44.74536], [-1.23262, 44.69302], [-1.24465, 44.6231], [-1.26205, 44.6322], [-1.16203, 45.29969], [-1.15619, 45.47611], [-1.0912, 45.56241], [-0.98916, 45.58134], [-1.02219, 45.62263], [-1.04324, 45.61754], [-1.20932, 45.6967], [-1.23089, 45.69134], [-1.19597, 45.67363], [-1.22829, 45.67506], [-1.23723, 45.7059], [-1.24257, 45.78157], [-1.1337, 45.80276], [-1.17024, 45.85593], [-1.11361, 45.8593], [-1.07379, 45.91423], [-1.07686, 45.9367], [-1.09961, 45.94438], [-1.06432, 45.94991], [-1.12145, 46.00297], [-1.06308, 45.99443], [-1.05612, 46.03422], [-1.08884, 46.05395], [-1.10073, 46.0938], [-1.14307, 46.10632], [-1.12414, 46.11204], [-1.12823, 46.12655], [-1.17328, 46.13803], [-1.16072, 46.15549], [-1.20564, 46.14581], [-1.24204, 46.15745], [-1.20249, 46.18895], [-1.199, 46.21325], [-1.11116, 46.26134], [-1.11476, 46.29158], [-1.1627, 46.32375], [-1.20306, 46.31574], [-1.20739, 46.26657], [-1.2959, 46.32393], [-1.30598, 46.31919], [-1.29262, 46.29148], [-1.27228, 46.28942], [-1.29374, 46.28869], [-1.34313, 46.34285], [-1.46594, 46.34236], [-1.51507, 46.4043], [-1.64789, 46.42016], [-1.77714, 46.49276], [-1.81235, 46.49342], [-1.85702, 46.60985], [-1.94288, 46.6927], [-1.96581, 46.69194], [-1.99786, 46.73239], [-2.14206, 46.81906], [-2.15503, 46.88965], [-2.11323, 46.89601], [-2.1178, 46.90832], [-2.04469, 46.96804], [-2.02933, 47.00985], [-1.98041, 47.02891], [-2.00472, 47.06146], [-2.10344, 47.11436], [-2.24721, 47.13247], [-2.2231, 47.15388], [-2.16706, 47.16618], [-2.15837, 47.20905], [-2.18121, 47.2351], [-2.16999, 47.26848], [-2.18736, 47.28062], [-2.29818, 47.23312], [-2.37516, 47.2788], [-2.42038, 47.27645], [-2.41655, 47.25872], [-2.4316, 47.25832], [-2.54636, 47.29065], [-2.51193, 47.29958], [-2.50291, 47.32875], [-2.52116, 47.35881], [-2.55811, 47.37568], [-2.4682, 47.42091], [-2.43162, 47.41575], [-2.45867, 47.42361], [-2.44549, 47.43564], [-2.45533, 47.4469], [-2.49295, 47.44791], [-2.501, 47.49272], [-2.46744, 47.48263], [-2.42053, 47.49528], [-2.53422, 47.52806], [-2.55282, 47.51258], [-2.63188, 47.50457], [-2.61183, 47.50918], [-2.60878, 47.52724], [-2.5759, 47.52197], [-2.58791, 47.52957], [-2.5668, 47.53294], [-2.58179, 47.53605], [-2.55914, 47.55183], [-2.58685, 47.56352], [-2.58287, 47.5433], [-2.60435, 47.53103], [-2.61895, 47.55166], [-2.60896, 47.56554], [-2.61064, 47.5676], [-2.62935, 47.54947], [-2.61637, 47.53719], [-2.62602, 47.53069], [-2.67028, 47.54303], [-2.62113, 47.52541], [-2.66434, 47.51864], [-2.67492, 47.49186], [-2.72464, 47.50642], [-2.81531, 47.48665], [-2.85027, 47.49879], [-2.84736, 47.51938], [-2.90358, 47.53435], [-2.8926, 47.54435], [-2.91276, 47.54222], [-2.91449, 47.55741], [-2.87853, 47.56382], [-2.85333, 47.53701], [-2.82718, 47.55007], [-2.83048, 47.5456], [-2.82719, 47.53651], [-2.82372, 47.53635], [-2.82428, 47.55651], [-2.80672, 47.55603], [-2.79999, 47.53741], [-2.78767, 47.55251], [-2.76762, 47.53568], [-2.73464, 47.54086], [-2.71851, 47.58749], [-2.71083, 47.57602], [-2.68931, 47.59088], [-2.68669, 47.63146], [-2.70262, 47.63208], [-2.68985, 47.63731], [-2.71245, 47.64841], [-2.7028, 47.62269], [-2.71726, 47.61985], [-2.70126, 47.61848], [-2.69564, 47.6098], [-2.71733, 47.61431], [-2.70275, 47.60251], [-2.72121, 47.58999], [-2.72106, 47.60311], [-2.77821, 47.61872], [-2.73364, 47.61279], [-2.7549, 47.63777], [-2.77815, 47.62778], [-2.79408, 47.64501], [-2.78328, 47.62093], [-2.86278, 47.62208], [-2.8587, 47.60145], [-2.8898, 47.60257], [-2.88526, 47.5788], [-2.89046, 47.57415], [-2.9081, 47.59156], [-2.92552, 47.5859], [-2.9182, 47.60273], [-2.92706, 47.59187], [-2.92744, 47.60123], [-2.93324, 47.60584], [-2.93676, 47.58571], [-2.95108, 47.60976], [-2.93637, 47.62602], [-2.95885, 47.62739], [-2.95816, 47.6386], [-2.97829, 47.65909], [-2.9536, 47.61221], [-2.97227, 47.60766], [-2.9543, 47.59717], [-2.97015, 47.58834], [-2.92658, 47.55687], [-2.97607, 47.55904], [-2.99443, 47.59069], [-2.98899, 47.567], [-3.00447, 47.56598], [-3.02456, 47.59205], [-3.01918, 47.56724], [-3.04474, 47.58738], [-3.05436, 47.56927], [-3.09543, 47.56374], [-3.10652, 47.57525], [-3.09232, 47.57903], [-3.12703, 47.59836], [-3.12948, 47.57499], [-3.1156, 47.57546], [-3.12975, 47.52191], [-3.08097, 47.47038], [-3.13297, 47.47496], [-3.15961, 47.5256], [-3.13442, 47.5459], [-3.13975, 47.5796], [-3.15838, 47.60698], [-3.19767, 47.62392], [-3.20921, 47.6698], [-3.16228, 47.68014], [-3.13232, 47.70153], [-3.16884, 47.69687], [-3.14836, 47.70361], [-3.14908, 47.71642], [-3.13149, 47.70391], [-3.12527, 47.7258], [-3.10311, 47.71823], [-3.10947, 47.72802], [-3.12786, 47.7282], [-3.15262, 47.71891], [-3.1346, 47.73139], [-3.15092, 47.73342], [-3.13484, 47.74734], [-3.14712, 47.75235], [-3.16008, 47.72898], [-3.18601, 47.74637], [-3.19364, 47.74839], [-3.20083, 47.74489], [-3.16974, 47.72807], [-3.16569, 47.70455], [-3.19463, 47.70354], [-3.1973, 47.6875], [-3.21626, 47.69579], [-3.19944, 47.68375], [-3.21855, 47.66534], [-3.2146, 47.64488], [-3.30046, 47.68943], [-3.35761, 47.6862], [-3.35246, 47.70038], [-3.32505, 47.70208], [-3.28576, 47.68618], [-3.27765, 47.69032], [-3.31087, 47.70945], [-3.35224, 47.70287], [-3.36541, 47.7103], [-3.3427, 47.71592], [-3.34784, 47.73456], [-3.30571, 47.74811], [-3.282, 47.77793], [-3.29071, 47.79126], [-3.27773, 47.79441], [-3.29024, 47.79312], [-3.29569, 47.78651], [-3.28681, 47.77283], [-3.31813, 47.75612], [-3.32621, 47.76609], [-3.32291, 47.74831], [-3.34425, 47.74159], [-3.37872, 47.79716], [-3.38542, 47.80463], [-3.39181, 47.8049], [-3.39237, 47.80699], [-3.3897, 47.8083], [-3.38622, 47.81694], [-3.38851, 47.82828], [-3.39942, 47.80908], [-3.35241, 47.7535], [-3.35583, 47.73241], [-3.38739, 47.70165], [-3.45276, 47.69534], [-3.52865, 47.76544], [-3.5179, 47.80314], [-3.54082, 47.82927], [-3.52401, 47.8449]], [[1.95618, 42.4577], [2.01438, 42.45168], [1.99164, 42.46268], [1.99832, 42.48516], [1.97876, 42.49477], [1.95618, 42.4577]], [[5.11714, 43.52011], [5.04561, 43.5218], [5.01689, 43.55626], [4.99983, 43.50815], [5.00289, 43.4713], [5.05188, 43.46356], [5.06081, 43.40286], [5.13727, 43.40019], [5.20444, 43.44214], [5.19842, 43.45089], [5.2266, 43.45301], [5.22484, 43.48107], [5.20558, 43.492], [5.14585, 43.45806], [5.11714, 43.52011]]], [[[-4.27801, 48.28186], [-4.28011, 48.28495], [-4.27731, 48.28385], [-4.27801, 48.28186]]], [[[-4.53814, 48.30375], [-4.53505, 48.30291], [-4.53894, 48.30262], [-4.53814, 48.30375]]], [[[-4.5308, 48.30352], [-4.52972, 48.30644], [-4.52867, 48.30524], [-4.5308, 48.30352]]], [[[-4.85773, 48.35072], [-4.84159, 48.35491], [-4.86448, 48.34248], [-4.85773, 48.35072]]], [[[-4.93326, 48.37478], [-4.94482, 48.36993], [-4.93523, 48.37534], [-4.93326, 48.37478]]], [[[-4.91118, 48.3744], [-4.89796, 48.37588], [-4.89269, 48.37323], [-4.90577, 48.3723], [-4.91118, 48.3744]]], [[[-4.89982, 48.38023], [-4.89731, 48.3803], [-4.89782, 48.37814], [-4.89982, 48.38023]]], [[[-4.96734, 48.39788], [-4.95344, 48.39607], [-4.9592, 48.38941], [-4.96734, 48.39788]]], [[[-4.94689, 48.40136], [-4.95258, 48.40083], [-4.94747, 48.40259], [-4.94689, 48.40136]]], [[[-4.98237, 48.41991], [-4.98382, 48.41636], [-4.98546, 48.41689], [-4.98237, 48.41991]]], [[[-5.01018, 48.42662], [-5.01406, 48.42578], [-5.01161, 48.43082], [-5.01018, 48.42662]]], [[[-4.7887, 48.43889], [-4.78746, 48.43734], [-4.79013, 48.43798], [-4.7887, 48.43889]]], [[[-5.11385, 48.43903], [-5.09331, 48.45259], [-5.14014, 48.45184], [-5.07252, 48.48273], [-5.03438, 48.46332], [-5.11385, 48.43903]]], [[[-5.1027, 48.48233], [-5.08996, 48.47896], [-5.10419, 48.48087], [-5.1027, 48.48233]]], [[[-4.77691, 48.5301], [-4.77249, 48.5273], [-4.77627, 48.52701], [-4.77691, 48.5301]]], [[[-4.61924, 48.58622], [-4.61628, 48.58497], [-4.61951, 48.58531], [-4.61924, 48.58622]]], [[[-4.63738, 48.60015], [-4.63491, 48.60147], [-4.63347, 48.59991], [-4.63738, 48.60015]]], [[[-4.57115, 48.6051], [-4.57169, 48.6085], [-4.56926, 48.60762], [-4.57115, 48.6051]]], [[[-4.59474, 48.62543], [-4.59343, 48.62383], [-4.593, 48.62228], [-4.59474, 48.62543]]], [[[-4.55168, 48.62927], [-4.55826, 48.6291], [-4.55776, 48.63081], [-4.55168, 48.62927]]], [[[-4.5682, 48.63739], [-4.56969, 48.64019], [-4.56665, 48.63844], [-4.5682, 48.63739]]], [[[-4.403, 48.63934], [-4.40598, 48.6393], [-4.40351, 48.64049], [-4.403, 48.63934]]], [[[-3.91977, 48.68267], [-3.92901, 48.69322], [-3.92601, 48.69917], [-3.91977, 48.68267]]], [[[-4.07279, 48.70574], [-4.06024, 48.70567], [-4.05985, 48.70267], [-4.07279, 48.70574]]], [[[-3.98961, 48.74532], [-4.02252, 48.73856], [-4.04017, 48.74637], [-3.98961, 48.74532]]], [[[-3.59831, 48.77088], [-3.59929, 48.76695], [-3.60344, 48.77097], [-3.59831, 48.77088]]], [[[-3.60906, 48.79395], [-3.60766, 48.79602], [-3.60544, 48.7945], [-3.60906, 48.79395]]], [[[-3.57671, 48.79519], [-3.57922, 48.79627], [-3.57692, 48.79753], [-3.57671, 48.79519]]], [[[-3.59544, 48.80102], [-3.59078, 48.79589], [-3.60213, 48.79824], [-3.59544, 48.80102]]], [[[-3.58235, 48.80473], [-3.56723, 48.808], [-3.56263, 48.80314], [-3.58006, 48.79871], [-3.58388, 48.79409], [-3.58235, 48.80473]]], [[[-3.55436, 48.8019], [-3.55695, 48.80293], [-3.55594, 48.80429], [-3.55436, 48.8019]]], [[[-3.4921, 48.87767], [-3.49082, 48.88012], [-3.48854, 48.87929], [-3.4921, 48.87767]]], [[[-3.48412, 48.88415], [-3.47581, 48.88152], [-3.48609, 48.88176], [-3.48412, 48.88415]]], [[[-3.19484, 47.29353], [-3.19531, 47.29175], [-3.19711, 47.29306], [-3.19484, 47.29353]]], [[[-3.23545, 47.32382], [-3.26233, 47.37157], [-3.24695, 47.37114], [-3.2447, 47.38762], [-3.21949, 47.37053], [-3.15729, 47.36462], [-3.13856, 47.32899], [-3.0559, 47.30817], [-3.09184, 47.2784], [-3.16764, 47.30159], [-3.21838, 47.29244], [-3.24828, 47.3135], [-3.23545, 47.32382]]], [[[-2.86336, 47.34897], [-2.88048, 47.33012], [-2.89063, 47.33768], [-2.89165, 47.34669], [-2.86336, 47.34897]]], [[[-2.97048, 47.3583], [-2.96893, 47.35552], [-2.97266, 47.35761], [-2.97048, 47.3583]]], [[[-3.24912, 47.38926], [-3.2514, 47.38631], [-3.25305, 47.38929], [-3.24912, 47.38926]]], [[[-2.94815, 47.37334], [-2.99368, 47.39342], [-2.99431, 47.39899], [-2.93938, 47.3947], [-2.94815, 47.37334]]], [[[-2.99567, 47.39536], [-2.9974, 47.39276], [-2.99932, 47.3947], [-2.99567, 47.39536]]], [[[-3.01322, 47.41074], [-3.01772, 47.41124], [-3.01214, 47.41191], [-3.01322, 47.41074]]], [[[-2.85039, 47.56287], [-2.84671, 47.56128], [-2.85076, 47.5611], [-2.85039, 47.56287]]], [[[-2.88607, 47.56546], [-2.88379, 47.56525], [-2.88737, 47.56298], [-2.88607, 47.56546]]], [[[-2.8856, 47.56883], [-2.88889, 47.57165], [-2.88673, 47.57143], [-2.8856, 47.56883]]], [[[-2.90875, 47.57724], [-2.91015, 47.56709], [-2.91045, 47.57761], [-2.90875, 47.57724]]], [[[-2.90147, 47.5723], [-2.89574, 47.57296], [-2.89901, 47.57105], [-2.90147, 47.5723]]], [[[-2.86899, 47.57664], [-2.86788, 47.57894], [-2.8666, 47.57811], [-2.86899, 47.57664]]], [[[-2.91222, 47.57862], [-2.91456, 47.57811], [-2.91461, 47.57987], [-2.91222, 47.57862]]], [[[-2.92944, 47.58167], [-2.92583, 47.5789], [-2.92842, 47.57739], [-2.92944, 47.58167]]], [[[-2.93302, 47.58548], [-2.9298, 47.58391], [-2.93327, 47.58465], [-2.93302, 47.58548]]], [[[-2.8469, 47.60959], [-2.85079, 47.61329], [-2.84562, 47.61082], [-2.8469, 47.60959]]], [[[-3.17288, 47.68766], [-3.17005, 47.68541], [-3.17199, 47.68559], [-3.17288, 47.68766]]], [[[-3.18521, 47.68609], [-3.18693, 47.68794], [-3.18391, 47.68714], [-3.18521, 47.68609]]], [[[-3.17983, 47.68711], [-3.17658, 47.68735], [-3.17801, 47.68629], [-3.17983, 47.68711]]], [[[-3.13883, 47.71281], [-3.13646, 47.71377], [-3.13674, 47.71205], [-3.13883, 47.71281]]], [[[-3.15688, 47.70852], [-3.16356, 47.71876], [-3.15621, 47.7201], [-3.15688, 47.70852]]], [[[-2.94803, 48.77841], [-2.95236, 48.77875], [-2.94676, 48.78055], [-2.94803, 48.77841]]], [[[-2.97663, 48.79723], [-2.98283, 48.79951], [-2.97642, 48.79837], [-2.97663, 48.79723]]], [[[-3.40536, 48.83639], [-3.40833, 48.83254], [-3.40999, 48.83994], [-3.40536, 48.83639]]], [[[-3.01827, 48.83675], [-3.02119, 48.83584], [-3.02172, 48.83762], [-3.01827, 48.83675]]], [[[-3.29265, 48.83745], [-3.29536, 48.83867], [-3.29379, 48.8392], [-3.29265, 48.83745]]], [[[-2.99227, 48.8399], [-2.98851, 48.83918], [-2.99285, 48.83835], [-2.99227, 48.8399]]], [[[-3.27169, 48.83885], [-3.27403, 48.83905], [-3.27237, 48.84075], [-3.27169, 48.83885]]], [[[-3.01613, 48.84465], [-3.01977, 48.83916], [-3.02109, 48.84442], [-3.01613, 48.84465]]], [[[-3.2982, 48.84553], [-3.29444, 48.84557], [-3.2935, 48.84386], [-3.2982, 48.84553]]], [[[-3.27886, 48.84372], [-3.2814, 48.84685], [-3.27851, 48.84487], [-3.27886, 48.84372]]], [[[-3.30808, 48.84472], [-3.30743, 48.84741], [-3.30598, 48.84549], [-3.30808, 48.84472]]], [[[-3.30211, 48.84506], [-3.30581, 48.84645], [-3.30357, 48.84773], [-3.30211, 48.84506]]], [[[-2.98632, 48.84496], [-2.98619, 48.84885], [-2.98531, 48.84452], [-2.98632, 48.84496]]], [[[-2.97785, 48.84631], [-2.98093, 48.84684], [-2.98025, 48.84831], [-2.97785, 48.84631]]], [[[-2.99675, 48.83839], [-3.01306, 48.85165], [-2.99864, 48.85156], [-3.01184, 48.85877], [-2.98495, 48.86347], [-2.99675, 48.83839]]], [[[-3.2021, 48.85371], [-3.20407, 48.8505], [-3.20428, 48.85419], [-3.2021, 48.85371]]], [[[-3.25918, 48.85335], [-3.25975, 48.85355], [-3.26158, 48.85581], [-3.25918, 48.85335]]], [[[-2.98002, 48.85949], [-2.98332, 48.85903], [-2.98118, 48.8608], [-2.98002, 48.85949]]], [[[-3.03202, 48.8627], [-3.03963, 48.85919], [-3.04456, 48.85932], [-3.03202, 48.8627]]], [[[-3.19635, 48.86773], [-3.19529, 48.8631], [-3.19823, 48.86431], [-3.19635, 48.86773]]], [[[-3.1853, 48.87273], [-3.18171, 48.87435], [-3.18034, 48.86563], [-3.1853, 48.87273]]], [[[-3.43591, 48.89883], [-3.43924, 48.89916], [-3.43564, 48.90064], [-3.43591, 48.89883]]], [[[-1.22951, 44.58872], [-1.24954, 44.58029], [-1.24631, 44.57179], [-1.25158, 44.57956], [-1.24787, 44.58688], [-1.23583, 44.59414], [-1.22951, 44.58872]]], [[[-1.02059, 44.64624], [-1.02756, 44.64698], [-1.02681, 44.6502], [-1.02059, 44.64624]]], [[[-1.01378, 44.6518], [-1.02456, 44.65288], [-1.02997, 44.6492], [-1.03261, 44.6513], [-1.02626, 44.66247], [-1.01378, 44.6518]]], [[[-1.18142, 44.69305], [-1.18183, 44.69683], [-1.18001, 44.69279], [-1.18142, 44.69305]]], [[[-1.18537, 44.70315], [-1.17789, 44.69736], [-1.188, 44.69962], [-1.18537, 44.70315]]], [[[-1.27806, 45.88642], [-1.38598, 45.95239], [-1.38787, 46.00002], [-1.4124, 46.04789], [-1.37023, 46.03924], [-1.31515, 45.99389], [-1.23755, 45.98391], [-1.23377, 45.92706], [-1.18741, 45.8866], [-1.20771, 45.85034], [-1.19545, 45.82939], [-1.23642, 45.80454], [-1.27806, 45.88642]]], [[[-1.11947, 45.96143], [-1.10533, 45.95439], [-1.1163, 45.9522], [-1.11947, 45.96143]]], [[[-1.17559, 46.008], [-1.16826, 46.02562], [-1.15428, 46.01929], [-1.17559, 46.008]]], [[[-1.4836, 46.20224], [-1.41294, 46.23014], [-1.43919, 46.21017], [-1.35472, 46.20611], [-1.29276, 46.18735], [-1.27424, 46.16016], [-1.25495, 46.16352], [-1.27956, 46.14369], [-1.32163, 46.14504], [-1.4616, 46.20212], [-1.53394, 46.20232], [-1.56293, 46.24384], [-1.50058, 46.25818], [-1.47455, 46.23326], [-1.51399, 46.2321], [-1.50671, 46.21457], [-1.4836, 46.20224]]], [[[-2.28635, 46.68857], [-2.3793, 46.69853], [-2.40048, 46.72606], [-2.31835, 46.71986], [-2.28635, 46.68857]]], [[[-2.23808, 46.96513], [-2.26167, 46.95931], [-2.3011, 46.98904], [-2.29209, 47.01145], [-2.30759, 47.02465], [-2.22562, 47.01685], [-2.21881, 46.99171], [-2.23861, 46.9976], [-2.23648, 46.97988], [-2.15718, 46.95004], [-2.148, 46.89462], [-2.19084, 46.94583], [-2.23808, 46.96513]]], [[[-2.62284, 47.40975], [-2.62008, 47.41356], [-2.61777, 47.41153], [-2.62284, 47.40975]]], [[[-2.59191, 47.5253], [-2.59472, 47.52617], [-2.59313, 47.52759], [-2.59191, 47.5253]]], [[[-2.8442, 47.55531], [-2.84492, 47.56001], [-2.84263, 47.56038], [-2.8442, 47.55531]]], [[[-2.83027, 47.55656], [-2.83124, 47.56026], [-2.82904, 47.55689], [-2.83027, 47.55656]]], [[[-2.80512, 47.56079], [-2.80651, 47.56559], [-2.80336, 47.56326], [-2.80512, 47.56079]]], [[[-2.78724, 47.56329], [-2.79228, 47.56226], [-2.79531, 47.56474], [-2.78724, 47.56329]]], [[[-2.79539, 47.571], [-2.78596, 47.57547], [-2.78595, 47.56848], [-2.79539, 47.571]]], [[[-2.74768, 47.5749], [-2.74993, 47.57621], [-2.74633, 47.57618], [-2.74768, 47.5749]]], [[[-2.73874, 47.58377], [-2.72405, 47.57644], [-2.72741, 47.57259], [-2.73874, 47.58377]]], [[[-2.85809, 47.5789], [-2.83887, 47.6072], [-2.84067, 47.59351], [-2.82446, 47.59066], [-2.8496, 47.58738], [-2.85956, 47.55989], [-2.85809, 47.5789]]], [[[-2.78618, 47.58952], [-2.77448, 47.5946], [-2.77709, 47.58636], [-2.78618, 47.58952]]], [[[-2.76232, 47.59216], [-2.76314, 47.59036], [-2.76477, 47.59195], [-2.76232, 47.59216]]], [[[-2.80961, 47.57826], [-2.79474, 47.60564], [-2.78788, 47.59954], [-2.80961, 47.57826]]], [[[-2.72586, 47.5906], [-2.72758, 47.59543], [-2.72272, 47.59267], [-2.72586, 47.5906]]], [[[-2.81239, 47.59873], [-2.80915, 47.59424], [-2.81293, 47.59812], [-2.81239, 47.59873]]], [[[-2.72346, 47.60043], [-2.72368, 47.59848], [-2.72593, 47.59965], [-2.72346, 47.60043]]], [[[-2.77026, 47.60613], [-2.75474, 47.60682], [-2.75235, 47.60354], [-2.77026, 47.60613]]], [[[-2.80269, 47.60867], [-2.80051, 47.60759], [-2.80562, 47.60863], [-2.80269, 47.60867]]], [[[-2.77476, 47.61488], [-2.77864, 47.61365], [-2.78423, 47.61552], [-2.77476, 47.61488]]], [[[-2.18927, 48.62704], [-2.19377, 48.61835], [-2.19552, 48.61962], [-2.18927, 48.62704]]], [[[-1.5109, 48.63502], [-1.5111, 48.63695], [-1.50962, 48.63597], [-1.5109, 48.63502]]], [[[-2.16138, 48.63725], [-2.15857, 48.63938], [-2.15926, 48.6372], [-2.16138, 48.63725]]], [[[-2.07416, 48.67467], [-2.06943, 48.67877], [-2.06783, 48.67699], [-2.07416, 48.67467]]], [[[-1.95253, 48.69878], [-1.95373, 48.69689], [-1.95481, 48.6992], [-1.95253, 48.69878]]], [[[-1.83982, 48.70717], [-1.83923, 48.7098], [-1.83556, 48.71223], [-1.83982, 48.70717]]], [[[-1.82085, 48.86854], [-1.83679, 48.87313], [-1.83869, 48.87783], [-1.82236, 48.87204], [-1.82085, 48.86854]]], [[[-1.76603, 48.87183], [-1.76782, 48.8745], [-1.76609, 48.87506], [-1.76603, 48.87183]]], [[[-1.841, 48.87789], [-1.84184, 48.87556], [-1.84264, 48.8785], [-1.841, 48.87789]]], [[[-1.24274, 49.59128], [-1.24053, 49.58545], [-1.24911, 49.59037], [-1.24274, 49.59128]]], [[[5.38894, 43.1727], [5.37194, 43.17965], [5.39844, 43.17434], [5.38894, 43.1727]]], [[[5.39128, 43.18615], [5.38364, 43.18722], [5.38094, 43.18986], [5.39128, 43.18615]]], [[[5.36144, 43.19687], [5.37005, 43.19544], [5.3705, 43.19383], [5.36144, 43.19687]]], [[[5.3374, 43.21288], [5.33821, 43.20794], [5.32852, 43.21248], [5.3374, 43.21288]]], [[[3.50355, 43.2631], [3.50066, 43.2629], [3.50223, 43.26419], [3.50355, 43.2631]]], [[[5.32393, 43.28619], [5.28628, 43.26404], [5.30355, 43.27632], [5.29164, 43.28028], [5.32393, 43.28619]]], [[[5.32666, 43.27918], [5.32437, 43.28036], [5.32771, 43.28046], [5.32666, 43.27918]]], [[[5.35769, 43.29929], [5.35323, 43.31838], [5.31935, 43.34746], [5.34051, 43.33426], [5.35703, 43.31457], [5.35769, 43.29929]]], [[[4.87679, 43.36782], [4.87494, 43.36236], [4.87366, 43.36794], [4.87679, 43.36782]]], [[[9.26076, 41.33587], [9.24975, 41.34331], [9.2592, 41.34743], [9.26076, 41.33587]]], [[[9.26656, 41.36239], [9.25038, 41.36856], [9.27466, 41.36852], [9.26656, 41.36239]]], [[[9.22737, 41.37146], [9.23027, 41.37224], [9.22633, 41.37072], [9.22737, 41.37146]]], [[[9.35196, 41.54033], [9.35497, 41.54042], [9.35516, 41.53819], [9.35196, 41.54033]]], [[[9.36471, 41.55124], [9.35919, 41.5509], [9.36486, 41.55263], [9.36471, 41.55124]]], [[[9.37449, 41.56152], [9.37082, 41.56044], [9.37098, 41.56292], [9.37449, 41.56152]]], [[[9.36316, 41.63409], [9.36091, 41.63323], [9.36134, 41.63448], [9.36316, 41.63409]]], [[[9.39411, 41.67273], [9.39202, 41.66812], [9.38954, 41.6685], [9.39411, 41.67273]]], [[[9.41378, 41.9557], [9.40647, 41.7137], [9.40019, 41.69296], [9.37231, 41.67883], [9.3881, 41.67026], [9.38546, 41.64626], [9.34943, 41.63846], [9.35461, 41.6166], [9.30761, 41.6283], [9.28094, 41.59719], [9.29602, 41.5847], [9.31806, 41.60486], [9.36796, 41.59124], [9.34281, 41.55937], [9.2725, 41.52883], [9.28453, 41.51734], [9.26821, 41.50081], [9.28581, 41.49924], [9.28775, 41.48385], [9.26705, 41.47071], [9.27794, 41.46422], [9.22395, 41.44249], [9.21532, 41.4133], [9.22369, 41.40475], [9.2651, 41.42829], [9.25974, 41.41366], [9.22004, 41.36739], [9.18035, 41.3662], [9.13294, 41.39976], [9.0965, 41.39206], [9.09503, 41.41179], [9.12237, 41.44149], [9.07012, 41.44461], [9.07994, 41.47749], [9.0418, 41.45681], [8.99589, 41.48531], [8.98355, 41.4738], [8.95991, 41.49193], [8.92003, 41.48911], [8.91475, 41.50721], [8.8833, 41.50524], [8.89046, 41.51638], [8.87781, 41.52379], [8.84088, 41.51969], [8.85328, 41.54711], [8.82181, 41.54435], [8.78219, 41.56633], [8.80259, 41.57317], [8.77415, 41.59226], [8.79435, 41.63269], [8.87244, 41.64718], [8.9135, 41.691], [8.81272, 41.71413], [8.78283, 41.69921], [8.77498, 41.74142], [8.7072, 41.7218], [8.70456, 41.73938], [8.65872, 41.74026], [8.72801, 41.7739], [8.71083, 41.80101], [8.77129, 41.81124], [8.78452, 41.83112], [8.75093, 41.84516], [8.78823, 41.85046], [8.77927, 41.88361], [8.80263, 41.89646], [8.75238, 41.93339], [8.71944, 41.90815], [8.64148, 41.90991], [8.60661, 41.89517], [8.6234, 41.93484], [8.59208, 41.9644], [8.66291, 41.97654], [8.65999, 42.01231], [8.74652, 42.0511], [8.71886, 42.06379], [8.70034, 42.11231], [8.65893, 42.10129], [8.61209, 42.1346], [8.57986, 42.12942], [8.58546, 42.15173], [8.55879, 42.14632], [8.5934, 42.16831], [8.56114, 42.1716], [8.58511, 42.17901], [8.58139, 42.20594], [8.56772, 42.20452], [8.57385, 42.22797], [8.53971, 42.23713], [8.6928, 42.26829], [8.66047, 42.30235], [8.60165, 42.30896], [8.62822, 42.33201], [8.61487, 42.34959], [8.55779, 42.33224], [8.55773, 42.36005], [8.54322, 42.36729], [8.54729, 42.37889], [8.56918, 42.36941], [8.60791, 42.38612], [8.60611, 42.41645], [8.65682, 42.4168], [8.66372, 42.43447], [8.64822, 42.44228], [8.66834, 42.44478], [8.67983, 42.46812], [8.64924, 42.47431], [8.6655, 42.51363], [8.7202, 42.52542], [8.70916, 42.57672], [8.72681, 42.58405], [8.72704, 42.56161], [8.75576, 42.57139], [8.78105, 42.55652], [8.80481, 42.57089], [8.80263, 42.60257], [8.86739, 42.6084], [8.87916, 42.62873], [8.93066, 42.64531], [8.94669, 42.63364], [9.01495, 42.64136], [9.05932, 42.66007], [9.0571, 42.69548], [9.12456, 42.73164], [9.2211, 42.73567], [9.25779, 42.7179], [9.28746, 42.67449], [9.31418, 42.689], [9.34563, 42.74327], [9.34158, 42.79757], [9.30955, 42.83378], [9.3403, 42.86567], [9.32137, 42.89688], [9.36147, 42.92476], [9.34969, 42.92882], [9.35905, 42.9454], [9.34016, 42.99306], [9.4199, 43.01161], [9.46355, 42.9864], [9.45159, 42.96176], [9.46935, 42.93633], [9.49279, 42.80588], [9.44619, 42.67358], [9.53269, 42.54802], [9.54349, 42.4293], [9.53224, 42.37191], [9.55996, 42.28231], [9.55912, 42.1967], [9.54998, 42.10416], [9.41378, 41.9557]]], [[[8.59333, 41.87555], [8.5864, 41.87389], [8.59789, 41.88207], [8.59333, 41.87555]]], [[[8.54194, 42.3704], [8.53654, 42.36925], [8.53514, 42.37075], [8.54194, 42.3704]]], [[[9.34291, 42.96376], [9.34015, 42.96533], [9.34135, 42.96567], [9.34291, 42.96376]]], [[[6.39506, 42.98927], [6.39497, 42.98688], [6.39391, 42.98841], [6.39506, 42.98927]]], [[[6.25171, 43.00554], [6.20563, 42.98181], [6.16088, 43.0011], [6.21173, 43.00256], [6.24225, 43.02547], [6.25171, 43.00554]]], [[[6.40661, 42.99561], [6.37032, 43.00084], [6.38328, 43.0138], [6.41992, 43.01383], [6.40661, 42.99561]]], [[[6.35996, 43.01505], [6.36476, 43.01343], [6.36377, 43.00396], [6.35996, 43.01505]]], [[[6.13983, 43.02061], [6.14479, 43.0163], [6.13946, 43.01972], [6.13983, 43.02061]]], [[[9.4064, 43.02766], [9.40392, 43.02591], [9.40434, 43.02737], [9.4064, 43.02766]]], [[[6.43362, 43.01918], [6.47334, 43.04693], [6.51129, 43.04682], [6.43834, 43.0036], [6.43362, 43.01918]]], [[[5.79082, 43.06871], [5.78718, 43.07224], [5.79033, 43.07258], [5.79082, 43.06871]]], [[[5.77762, 43.07478], [5.79221, 43.07745], [5.78064, 43.06977], [5.77762, 43.07478]]], [[[5.76796, 43.08191], [5.76735, 43.07892], [5.7657, 43.0801], [5.76796, 43.08191]]], [[[5.91393, 43.11872], [5.91986, 43.11812], [5.91334, 43.11608], [5.91393, 43.11872]]], [[[5.74996, 43.12661], [5.74802, 43.12725], [5.75245, 43.1273], [5.74996, 43.12661]]], [[[5.61904, 43.15731], [5.61482, 43.16234], [5.62068, 43.15911], [5.61904, 43.15731]]], [[[7.03943, 43.50903], [7.05544, 43.50782], [7.03709, 43.50679], [7.03943, 43.50903]]], [[[7.06711, 43.51365], [7.03221, 43.52344], [7.07088, 43.51736], [7.06711, 43.51365]]]]}};    // GeoJSON simplifié du contour de la France
+
+const STATUT_LABELS = {
+  "Projet signé": "Projet signé",
+  "Etude en cours": "Étude en cours",
+  "PA en cours": "Pré-analyse en cours",
+  "En attente retour suite PA": "En attente de retour (pré-analyse)",
+  "En attente retour suite R2 ou R2 en attente": "En attente de retour (R2)",
+  "Reprise suite R2": "Reprise suite R2",
+  "Discussions/validations": "Discussions / validations",
+  "KO": "KO",
+  "Demande incomplète": "Demande incomplète",
+  "": "Non renseigné",
+};
+function statutGroup(statut){
+  if(statut === "Projet signé") return "Signé";
+  if(statut === "KO") return "KO";
+  return "Étude en cours";
+}
+const GROUP_COLORS = {"Signé":"#3FBE8E", "Étude en cours":"#4C8DFF", "KO":"#E5533D"};
+const GROUP_ORDER = ["Signé","Étude en cours","KO"];
+
+const PROSPECT_STYLE = {
+  "Nouveau":              {hex:"#0E8E9C", label:"Nouveau"},
+  "R1 prévu":             {hex:"#2E6FCC", label:"R1 prévu"},
+  "R1 fait":              {hex:"#2E9E6E", label:"R1 fait"},
+  "R1 à caler":           {hex:"#C98A1E", label:"R1 à caler"},
+  "R1 difficile à caler": {hex:"#B5601E", label:"R1 difficile à caler"},
+  "KO":                   {hex:"#8A5C5C", label:"KO"},
+  "":                     {hex:"#8A5C5C", label:"Non renseigné"},
+};
+const TYPE_SHAPE = {
+  "EPC":            {shape:"circle",  label:"EPC"},
+  "TI":             {shape:"square",  label:"TI"},
+  "LES 2":          {shape:"diamond", label:"TI + EPC"},
+  "DOCS INCOMPLETS":{shape:"triangle",label:"Docs incomplets"},
+  "":               {shape:"circle",  label:"Non renseigné"},
+};
+
+let ALL = [];
+let allStatutsProspect = [];
+let allTypes = [];
+
+const state = {
+  layers: {suivi:true, prospect:true},
+  statutGroups: new Set(["S::Signé","S::Étude en cours","S::KO"]),
+  statutsProspect: new Set(),
+  types: new Set(),
+  commercial: "",
+  search: "",
+};
+
+function rebuildDerived(){
+  RAW.suivi.forEach(d=>d._layer="suivi");
+  RAW.prospect.forEach(d=>d._layer="prospect");
+  ALL = [...RAW.suivi, ...RAW.prospect];
+  allStatutsProspect = [...new Set(RAW.prospect.map(d=>d.statut))];
+  allTypes = [...new Set(RAW.suivi.map(d=>d.type))];
+  state.statutsProspect = new Set(allStatutsProspect.map(s=>"P::"+s));
+  state.types = new Set(allTypes);
+}
+rebuildDerived();
+
+/* ================= MAP (fond stylisé : silhouette France sur fond bleu) ================= */
+const map = L.map('map', {
+  zoomControl:true, attributionControl:false,
+  minZoom:5, maxZoom:14,
+  zoomSnap:0.25
+}).setView([46.7, 2.2], 6);
+
+const franceLayer = L.geoJSON(FRANCE_SHAPE, {
+  style: {className:'france-shape', weight:1, color:'#D8D0BC', fillColor:'#F2EEE3', fillOpacity:1}
+}).addTo(map);
+
+const FR_BOUNDS = franceLayer.getBounds().pad(0.04);
+map.fitBounds(FR_BOUNDS);
+map.setMaxBounds(FR_BOUNDS.pad(0.6));
+
+L.control.attribution({prefix:false}).addAttribution('Contours France : IGN / data.gouv.fr').addTo(map);
+
+const markerLayer = L.layerGroup().addTo(map);
+const markersByKey = {}; // projet name -> {marker, latlng, precise:boolean}
+
+function shapeSvg(shape, hex, size){
+  const s = size;
+  if(shape==="square"){
+    return `<rect x="1" y="1" width="${s-2}" height="${s-2}" fill="${hex}" stroke="#12324A" stroke-width="1.5"/>`;
+  } else if(shape==="diamond"){
+    const c=s/2;
+    return `<polygon points="${c},1 ${s-1},${c} ${c},${s-1} 1,${c}" fill="${hex}" stroke="#12324A" stroke-width="1.5"/>`;
+  } else if(shape==="triangle"){
+    return `<polygon points="${s/2},1 ${s-1},${s-1} 1,${s-1}" fill="${hex}" stroke="#12324A" stroke-width="1.5"/>`;
+  }
+  return `<circle cx="${s/2}" cy="${s/2}" r="${s/2-1.5}" fill="${hex}" stroke="#12324A" stroke-width="1.5"/>`;
+}
+function makeIcon(shape, hex){
+  const s = 16;
+  const svg = `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" xmlns="http://www.w3.org/2000/svg">${shapeSvg(shape,hex,s)}</svg>`;
+  return L.divIcon({html:svg, className:'', iconSize:[s,s], iconAnchor:[s/2,s/2]});
+}
+
+function styleFor(d){
+  if(d._layer==="suivi"){
+    const group = statutGroup(d.statut);
+    const ty = TYPE_SHAPE[d.type] || TYPE_SHAPE[""];
+    return {hex:GROUP_COLORS[group], shape:ty.shape, groupLabel:group, detailLabel: STATUT_LABELS[d.statut] || d.statut || "Non renseigné"};
+  } else {
+    const st = PROSPECT_STYLE[d.statut] || PROSPECT_STYLE[""];
+    return {hex:st.hex, shape:"circle", groupLabel:st.label, detailLabel:st.label};
+  }
+}
+
+const SOURCE_LABEL = {
+  excel:   {text:"📍 Position exacte (Excel)", color:"#3FBE8E"},
+  override:{text:"📍 Position corrigée manuellement", color:"#3FBE8E"},
+  lieu:    {text:"📍 Position précise (recherche de lieu)", color:"#4C8DFF"},
+  ville:   {text:"≈ Position approximative (centre-ville)", color:"#C98A1E"},
+};
+function tooltipHtml(d, sty, source){
+  const rows = [];
+  if(d.commercial1) rows.push(`<div class="tt-row"><b>Commercial :</b> ${d.commercial1}${d.commercial2? ' / '+d.commercial2:''}</div>`);
+  if(d._layer==="suivi" && d.type) rows.push(`<div class="tt-row"><b>Type :</b> ${TYPE_SHAPE[d.type]? TYPE_SHAPE[d.type].label : d.type}</div>`);
+  if(d._layer==="suivi" && d.puissance) rows.push(`<div class="tt-row"><b>Puissance :</b> ${d.puissance}${/^[0-9.,]+$/.test(d.puissance.trim())? ' kWc':''}</div>`);
+  const comment = d.commentaire2 || d.commentaires || d.commentaire || "";
+  const src = SOURCE_LABEL[source];
+  return `
+    <div class="tt-content">
+      <div class="tt-title">${d.projet}</div>
+      <span class="tt-status" style="background:${sty.hex}22;color:${sty.hex}">${sty.detailLabel}</span>
+      ${rows.join("")}
+      ${comment? `<div class="tt-comment">"${comment}"</div>` : ""}
+      ${src? `<div class="tt-source" style="color:${src.color}">${src.text}</div>` : ""}
+    </div>
+  `;
+}
+
+function passesFilters(d){
+  if(!state.layers[d._layer]) return false;
+  if(d._layer==="suivi"){
+    if(!state.statutGroups.has("S::"+statutGroup(d.statut))) return false;
+    if(!state.types.has(d.type)) return false;
+  } else {
+    if(!state.statutsProspect.has("P::"+d.statut)) return false;
+  }
+  if(state.commercial && d.commercial1!==state.commercial && d.commercial2!==state.commercial) return false;
+  if(state.search){
+    const s = state.search.toLowerCase();
+    if(!d.projet.toLowerCase().includes(s)) return false;
+  }
+  return true;
+}
+
+function refreshMarkers(){
+  markerLayer.clearLayers();
+  let visible = 0;
+  ALL.forEach(d=>{
+    const rec = markersByKey[d.projet];
+    if(!rec || !rec.latlng) return;
+    if(!passesFilters(d)) return;
+    visible++;
+    const sty = styleFor(d);
+    const icon = makeIcon(sty.shape, sty.hex);
+    const m = L.marker(rec.latlng, {icon, draggable:true, riseOnHover:true});
+    m.bindTooltip(tooltipHtml(d, sty, rec.source), {className:'custom-tooltip', direction:'top', offset:[0,-10], sticky:true, opacity:1});
+    m.on('dragend', async (e)=>{
+      const ll = e.target.getLatLng();
+      rec.latlng = ll;
+      rec.source = 'override';
+      await saveOverride(d.projet, ll.lat, ll.lng);
+      refreshMarkers();
+    });
+    m.addTo(markerLayer);
+    rec.marker = m;
+  });
+  updateStatsBox(visible);
+  updateListPanel();
+}
+
+/* ================= SIDEBAR: STATUT / TYPE LISTS ================= */
+function buildStatutList(){
+  const box = document.getElementById('statut-list');
+  box.innerHTML = "";
+
+  const h1 = document.createElement('div');
+  h1.style.cssText="font-size:10.5px;color:var(--text-dim);margin:0 0 4px;font-family:'IBM Plex Mono',monospace;";
+  h1.textContent = "Projets en cours";
+  box.appendChild(h1);
+  GROUP_ORDER.forEach(group=>{
+    const key = "S::"+group;
+    const count = RAW.suivi.filter(d=>statutGroup(d.statut)===group).length;
+    const chip = document.createElement('div');
+    chip.className = "chip";
+    chip.innerHTML = `<span class="swatch" style="background:${GROUP_COLORS[group]}"></span>${group}<span class="count">${count}</span>`;
+    chip.onclick = ()=>{
+      if(state.statutGroups.has(key)) state.statutGroups.delete(key); else state.statutGroups.add(key);
+      chip.classList.toggle('off', !state.statutGroups.has(key));
+      refreshMarkers();
+    };
+    box.appendChild(chip);
+  });
+
+  const h2 = document.createElement('div');
+  h2.style.cssText="font-size:10.5px;color:var(--text-dim);margin:10px 0 4px;font-family:'IBM Plex Mono',monospace;";
+  h2.textContent = "Prospects";
+  box.appendChild(h2);
+  allStatutsProspect.forEach(statut=>{
+    const sty = PROSPECT_STYLE[statut] || PROSPECT_STYLE[""];
+    const key = "P::"+statut;
+    const count = RAW.prospect.filter(d=>d.statut===statut).length;
+    const chip = document.createElement('div');
+    chip.className = "chip";
+    chip.innerHTML = `<span class="swatch" style="background:${sty.hex}"></span>${sty.label}<span class="count">${count}</span>`;
+    chip.onclick = ()=>{
+      if(state.statutsProspect.has(key)) state.statutsProspect.delete(key); else state.statutsProspect.add(key);
+      chip.classList.toggle('off', !state.statutsProspect.has(key));
+      refreshMarkers();
+    };
+    box.appendChild(chip);
+  });
+}
+function buildTypeList(){
+  const box = document.getElementById('type-list');
+  box.innerHTML = "";
+  allTypes.forEach(t=>{
+    const ty = TYPE_SHAPE[t] || TYPE_SHAPE[""];
+    const count = RAW.suivi.filter(d=>d.type===t).length;
+    const chip = document.createElement('div');
+    chip.className = "chip";
+    const shapeClass = ty.shape==="square"?"sq":ty.shape==="diamond"?"diamond":ty.shape==="triangle"?"triangle":"";
+    const swatchStyle = ty.shape==="triangle" ? `border-bottom-color:#5C6B7A` : `background:#5C6B7A`;
+    chip.innerHTML = `<span class="swatch ${shapeClass}" style="${swatchStyle}"></span>${ty.label}<span class="count">${count}</span>`;
+    chip.onclick = ()=>{
+      if(state.types.has(t)) state.types.delete(t); else state.types.add(t);
+      chip.classList.toggle('off', !state.types.has(t));
+      refreshMarkers();
+    };
+    box.appendChild(chip);
+  });
+}
+function buildCommercialSelect(){
+  const sel = document.getElementById('commercial-select');
+  sel.innerHTML = '<option value="">Tous les commerciaux</option>';
+  const names = new Set();
+  ALL.forEach(d=>{ if(d.commercial1) names.add(d.commercial1); if(d.commercial2) names.add(d.commercial2); });
+  [...names].sort().forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    sel.appendChild(opt);
+  });
+  sel.onchange = ()=>{ state.commercial = sel.value; refreshMarkers(); };
+}
+function updateStatsBox(visible){
+  const box = document.getElementById('stats-box');
+  const totalSuivi = RAW.suivi.length, totalProspect = RAW.prospect.length;
+  const signes = RAW.suivi.filter(d=>statutGroup(d.statut)==="Signé").length;
+  const ko = RAW.suivi.filter(d=>statutGroup(d.statut)==="KO").length + RAW.prospect.filter(d=>d.statut==="KO").length;
+  box.innerHTML = `
+    <div class="stat-row"><span>Points affichés</span><b>${visible}</b></div>
+    <div class="stat-row"><span>Total projets en cours</span><b>${totalSuivi}</b></div>
+    <div class="stat-row"><span>Total prospects</span><b>${totalProspect}</b></div>
+    <div class="stat-row"><span>Signés</span><b style="color:#3FBE8E">${signes}</b></div>
+    <div class="stat-row"><span>KO</span><b style="color:#E5533D">${ko}</b></div>
+  `;
+  document.getElementById('n-suivi').textContent = totalSuivi;
+  document.getElementById('n-prospect').textContent = totalProspect;
+}
+
+/* ================= LIST PANEL / SEARCH ================= */
+function updateListPanel(){
+  const panel = document.getElementById('list-panel');
+  const body = document.getElementById('lp-body');
+  const countEl = document.getElementById('lp-count');
+  if(!state.search){ panel.classList.remove('open'); return; }
+  const results = ALL.filter(d=>passesFilters(d) && markersByKey[d.projet] && markersByKey[d.projet].latlng);
+  countEl.textContent = results.length + " résultat" + (results.length!==1?"s":"");
+  body.innerHTML = "";
+  results.slice(0,60).forEach(d=>{
+    const sty = styleFor(d);
+    const item = document.createElement('div');
+    item.className = "lp-item";
+    item.innerHTML = `<div class="lp-name" style="color:${sty.hex}">${d.projet}</div><div class="lp-meta">${sty.detailLabel}${d.commercial1? ' · '+d.commercial1:''}</div>`;
+    item.onclick = ()=>{
+      const rec = markersByKey[d.projet];
+      map.flyTo(rec.latlng, 11, {duration:.6});
+      setTimeout(()=> rec.marker && rec.marker.openTooltip(), 650);
+    };
+    body.appendChild(item);
+  });
+  panel.classList.add('open');
+}
+document.getElementById('search-input').addEventListener('input', (e)=>{
+  state.search = e.target.value.trim();
+  updateListPanel();
+});
+document.getElementById('lp-close').onclick = ()=>{
+  document.getElementById('search-input').value = "";
+  state.search = "";
+  document.getElementById('list-panel').classList.remove('open');
+};
+
+/* ================= LAYER TOGGLE BUTTONS ================= */
+document.querySelectorAll('.layer-btn').forEach(btn=>{
+  btn.onclick = ()=>{
+    const l = btn.dataset.layer;
+    state.layers[l] = !state.layers[l];
+    btn.classList.toggle('active', state.layers[l]);
+    refreshMarkers();
+  };
+});
+
+/* ================= LOCALISATION : positions précises + repli géocodage + cache =================
+   La persistance utilise le stockage local du navigateur (localStorage), pas le fichier lui-même :
+   un navigateur ne peut pas réécrire un fichier HTML ouvert en local. Les données importées et les
+   corrections de position restent donc mémorisées sur CET ordinateur / CE navigateur uniquement. */
+const STORAGE_PREFIX = "mousquetaires_carte:";
+async function getCache(key){
+  try{
+    const raw = localStorage.getItem(STORAGE_PREFIX+key);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+async function setCache(key, val){
+  try{ localStorage.setItem(STORAGE_PREFIX+key, JSON.stringify(val)); }catch(e){}
+}
+async function saveOverride(projet, lat, lng){
+  await setCache('override:'+projet, {lat,lng});
+}
+function cleanGeoQuery(name){
+  let q = name.replace(/\(.*?\)/g,'');
+  q = q.replace(/\b(INTERMARCHE|Intermarch[eé]|NETTO|Netto|BRICOMARCHE|Bricomarch[eé]|SUPER|HYPER|Super|Hyper|Aquila)\b/gi,'');
+  q = q.trim();
+  return q || name;
+}
+function geoQueryFor(d){
+  return GEO_OVERRIDES[d.projet] || cleanGeoQuery(d.projet);
+}
+async function geocodeCommune(query){
+  if(!query) return null;
+  try{
+    const res = await fetch('https://api-adresse.data.gouv.fr/search/?q='+encodeURIComponent(query)+'&limit=1&type=municipality');
+    const j = await res.json();
+    if(j.features && j.features.length){
+      const [lng,lat] = j.features[0].geometry.coordinates;
+      return {lat,lng};
+    }
+  }catch(e){}
+  return null;
+}
+
+async function geocodeAll(onProgress){
+  const total = ALL.length;
+  let done = 0;
+  for(const d of ALL){
+    if(markersByKey[d.projet] && markersByKey[d.projet].latlng){ done++; continue; }
+    const override = await getCache('override:'+d.projet);
+    if(override){
+      // Correction manuelle faite dans l'outil (glisser-déposer) : priorité absolue.
+      markersByKey[d.projet] = {latlng: L.latLng(override.lat, override.lng), source:'override'};
+    } else if(d.coords && d.coords.length===2){
+      // Coordonnées saisies directement dans la colonne "Coordonnées" de l'Excel :
+      // c'est la source la plus fiable (position réelle du magasin, renseignée à la main).
+      markersByKey[d.projet] = {latlng: L.latLng(d.coords[0], d.coords[1]), source:'excel'};
+    } else if(PRECISE_COORDS[d.projet]){
+      const [lat,lng] = PRECISE_COORDS[d.projet];
+      markersByKey[d.projet] = {latlng: L.latLng(lat, lng), source:'lieu'};
+    } else {
+      const cached = await getCache('geo:'+d.projet);
+      if(cached){
+        markersByKey[d.projet] = {latlng: L.latLng(cached.lat, cached.lng), source:'ville'};
+      } else {
+        const g = await geocodeCommune(geoQueryFor(d));
+        if(g){
+          markersByKey[d.projet] = {latlng: L.latLng(g.lat, g.lng), source:'ville'};
+          await setCache('geo:'+d.projet, g);
+        } else {
+          markersByKey[d.projet] = {latlng: null};
+        }
+      }
+    }
+    done++;
+    if(onProgress) onProgress(done, total);
+    if(done % 6 === 0) refreshMarkers();
+  }
+  refreshMarkers();
+  return ALL.filter(d=> !markersByKey[d.projet] || !markersByKey[d.projet].latlng).length;
+}
+
+async function initGeocoding(){
+  const fillEl = document.getElementById('geo-fill');
+  const textEl = document.getElementById('geo-text');
+  const unresolved = await geocodeAll((done,total)=>{
+    const pct = Math.round(done/total*100);
+    fillEl.style.width = pct+"%";
+    textEl.textContent = `Localisation des projets… ${done}/${total}`;
+  });
+  const total = ALL.length;
+  textEl.textContent = unresolved
+    ? `${total-unresolved}/${total} localisés · ${unresolved} à placer manuellement`
+    : `${total}/${total} projets localisés`;
+}
+
+/* ================= IMPORT EXCEL (mise à jour manuelle) ================= */
+function fmtExcelDate(v){
+  if(v===null || v===undefined || v==="") return "";
+  if(v instanceof Date){
+    const dd=String(v.getDate()).padStart(2,'0'), mm=String(v.getMonth()+1).padStart(2,'0'), yy=v.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  }
+  return String(v).trim();
+}
+// Lit une cellule "Coordonnées" au format "lat, lng" (celui utilisé dans l'Excel).
+function parseCoordsString(v){
+  if(!v) return null;
+  const parts = String(v).split(',').map(s=>parseFloat(s.trim()));
+  if(parts.length===2 && !isNaN(parts[0]) && !isNaN(parts[1])) return parts;
+  return null;
+}
+function sheetRows(wb, name){
+  const sheet = wb.Sheets[name];
+  if(!sheet) return [];
+  return XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, dateNF:'dd/mm/yyyy', defval:""});
+}
+function parseWorkbook(wb){
+  // Colonnes de l'onglet "Suivi" : Projet, Coordonnées, Puissance, TI/EPC ?, Commentaires,
+  // Deadline pré-analyse, Pré-analyse envoyée, Nombre P-A, Pré-analyse validée, Planner créé,
+  // Deadline R2, Offre envoyée, Nombre R2, Offre validée, Projet fini, Commercial 1,
+  // Commercial 2, Commentaire, Date du jour, Statut
+  const suiviRows = sheetRows(wb, 'Suivi').slice(1);
+  const suivi = suiviRows.filter(r=>r[0]).map(r=>({
+    projet: fmtExcelDate(r[0]), coords: parseCoordsString(r[1]), puissance: fmtExcelDate(r[2]),
+    type: fmtExcelDate(r[3]), commentaires: fmtExcelDate(r[4]),
+    deadlinePA: fmtExcelDate(r[5]), paEnvoyee: fmtExcelDate(r[6]), nbPA: fmtExcelDate(r[7]),
+    paValidee: fmtExcelDate(r[8]), plannerCree: fmtExcelDate(r[9]), deadlineR2: fmtExcelDate(r[10]),
+    offreEnvoyee: fmtExcelDate(r[11]), nbR2: fmtExcelDate(r[12]), offreValidee: fmtExcelDate(r[13]),
+    projetFini: fmtExcelDate(r[14]), commercial1: fmtExcelDate(r[15]), commercial2: fmtExcelDate(r[16]),
+    commentaire2: fmtExcelDate(r[17]), statut: fmtExcelDate(r[19]),
+  }));
+  const prospectRows = sheetRows(wb, 'Suivi prospect').slice(1);
+  const prospect = prospectRows.filter(r=>r[0]).map(r=>({
+    projet: fmtExcelDate(r[0]), statut: fmtExcelDate(r[1]), commercial1: fmtExcelDate(r[2]),
+    commercial2: fmtExcelDate(r[3]), commentaire: fmtExcelDate(r[4]),
+  }));
+  return {suivi, prospect};
+}
+
+// Parseur souple pour un JSON déjà structuré (ex: sortie Power Automate = tableau d'objets par feuille)
+function findKey(obj, candidates){
+  const keys = Object.keys(obj);
+  for(const cand of candidates){
+    const hit = keys.find(k=> k.toLowerCase().replace(/\s+/g,'') === cand.toLowerCase().replace(/\s+/g,''));
+    if(hit) return hit;
+  }
+  for(const cand of candidates){
+    const hit = keys.find(k=> k.toLowerCase().includes(cand.toLowerCase()));
+    if(hit) return hit;
+  }
+  return null;
+}
+function normalizeSuiviObj(o){
+  const g = (cands)=> { const k = findKey(o,cands); return k? String(o[k]).trim() : ""; };
+  return {
+    projet: g(["Projet"]), coords: parseCoordsString(g(["Coordonnées","Coordonnees"])),
+    type: g(["TI/EPC ?","TI/EPC"]), commentaires: g(["Commentaires"]),
+    deadlinePA: g(["Deadline pré-analyse"]), paEnvoyee: g(["Pré-analyse envoyée"]), nbPA: g(["Nombre P-A"]),
+    paValidee: g(["Pré-analyse validée"]), plannerCree: g(["Planner créé"]), deadlineR2: g(["Deadline R2"]),
+    offreEnvoyee: g(["Offre envoyée"]), nbR2: g(["Nombre R2"]), offreValidee: g(["Offre validée"]),
+    projetFini: g(["Projet fini"]), commercial1: g(["Commercial 1"]), commercial2: g(["Commercial 2"]),
+    commentaire2: g(["Commentaire"]), statut: g(["Statut"]),
+  };
+}
+function normalizeProspectObj(o){
+  const g = (cands)=> { const k = findKey(o,cands); return k? String(o[k]).trim() : ""; };
+  return {
+    projet: g(["Projet"]), statut: g(["Statut"]), commercial1: g(["Commercial 1"]),
+    commercial2: g(["Commercial 2"]), commentaire: g(["Commentaire"]),
+  };
+}
+function parseJsonPayload(json){
+  const suiviArr = json.suivi || json.Suivi || [];
+  const prospectArr = json.prospect || json.Prospect || json["Suivi prospect"] || [];
+  return {
+    suivi: suiviArr.filter(o=>o && (o.Projet||o.projet)).map(normalizeSuiviObj),
+    prospect: prospectArr.filter(o=>o && (o.Projet||o.projet)).map(normalizeProspectObj),
+  };
+}
+
+async function applyNewData(newData, sourceLabel){
+  RAW.suivi = newData.suivi;
+  RAW.prospect = newData.prospect;
+  Object.keys(markersByKey).forEach(k=> delete markersByKey[k]); // relocaliser les nouvelles entrées
+  rebuildDerived();
+  state.statutGroups = new Set(["S::Signé","S::Étude en cours","S::KO"]);
+  state.commercial = "";
+  document.getElementById('commercial-select').value = "";
+  buildStatutList();
+  buildTypeList();
+  buildCommercialSelect();
+  await setCache('lastData', {suivi: RAW.suivi, prospect: RAW.prospect, savedAt: Date.now()});
+  document.getElementById('data-meta').innerHTML = sourceLabel;
+  await initGeocoding();
+}
+
+document.getElementById('btn-import').onclick = ()=> document.getElementById('file-input').click();
+document.getElementById('file-input').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('import-status');
+  statusEl.textContent = "Lecture du fichier…";
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array', cellDates:true});
+    const parsed = parseWorkbook(wb);
+    if(!parsed.suivi.length && !parsed.prospect.length){
+      statusEl.textContent = "Aucune donnée reconnue — vérifiez les onglets 'Suivi' et 'Suivi prospect'.";
+      return;
+    }
+    const now = new Date();
+    const label = `Mis à jour manuellement depuis <b>${file.name}</b><br>le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}`;
+    await applyNewData(parsed, label);
+    statusEl.textContent = "Carte mise à jour ✓";
+    setTimeout(()=> statusEl.textContent = "", 4000);
+  }catch(err){
+    statusEl.textContent = "Erreur de lecture : "+err.message;
+  }
+  e.target.value = "";
+});
+
+/* ================= SYNCHRONISATION AUTOMATIQUE (URL JSON publiée, ex. via Power Automate) ================= */
+document.getElementById('btn-save-sync').onclick = async ()=>{
+  const url = document.getElementById('sync-url-input').value.trim();
+  const statusEl = document.getElementById('sync-status');
+  if(!url){
+    await setCache('autoSyncUrl', "");
+    statusEl.textContent = "Synchronisation automatique désactivée.";
+    return;
+  }
+  statusEl.textContent = "Test de connexion…";
+  const ok = await trySync(url, true);
+  if(ok){
+    await setCache('autoSyncUrl', url);
+    statusEl.textContent = "Synchro activée — la carte se mettra à jour automatiquement à chaque ouverture.";
+  } else {
+    statusEl.textContent = "Adresse injoignable ou format inattendu — vérifiez l'URL publiée par votre flux Power Automate.";
+  }
+};
+async function trySync(url, isManualTest){
+  try{
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) return false;
+    const json = await res.json();
+    const parsed = parseJsonPayload(json);
+    if(!parsed.suivi.length && !parsed.prospect.length) return false;
+    const now = new Date();
+    const label = `Synchronisé automatiquement le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}`;
+    await applyNewData(parsed, label);
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ================= EXPORT JPEG (dessin direct sur canvas — pas de capture DOM/Leaflet) =================
+   On ne capture plus le rendu de la carte Leaflet (source du décalage : le pan/zoom de Leaflet
+   utilise des transformations CSS que html2canvas ne restitue pas fiablement). On redessine la
+   France, les points et la légende nous-mêmes sur un <canvas>, à partir des mêmes coordonnées
+   lat/lng, avec une projection calculée une seule fois : donc aucun décalage possible. */
+
+function computeFranceProjection(canvasW, canvasH, padding){
+  let minLng=Infinity, maxLng=-Infinity, minLat=Infinity, maxLat=-Infinity;
+  (function walk(coords){
+    if(typeof coords[0] === 'number'){
+      const [lng,lat] = coords;
+      if(lng<minLng) minLng=lng; if(lng>maxLng) maxLng=lng;
+      if(lat<minLat) minLat=lat; if(lat>maxLat) maxLat=lat;
+    } else { coords.forEach(walk); }
+  })(FRANCE_SHAPE.geometry.coordinates);
+
+  const meanLatRad = (minLat+maxLat)/2 * Math.PI/180;
+  const cosLat = Math.cos(meanLatRad);
+  const lngSpan = (maxLng-minLng) * cosLat;
+  const latSpan = (maxLat-minLat);
+  const w = canvasW - padding*2, h = canvasH - padding*2;
+  const scale = Math.min(w/lngSpan, h/latSpan);
+  const offsetX = padding + (w - lngSpan*scale)/2;
+  const offsetY = padding + (h - latSpan*scale)/2;
+
+  return function project(lng, lat){
+    const x = offsetX + (lng-minLng)*cosLat*scale;
+    const y = offsetY + (maxLat-lat)*scale;
+    return [x,y];
+  };
+}
+
+function drawFranceOnCanvas(ctx, project){
+  ctx.fillStyle = '#F2EEE3';
+  ctx.strokeStyle = '#D8D0BC';
+  ctx.lineWidth = 1;
+  const polys = FRANCE_SHAPE.geometry.type === 'MultiPolygon'
+    ? FRANCE_SHAPE.geometry.coordinates
+    : [FRANCE_SHAPE.geometry.coordinates];
+  polys.forEach(rings=>{
+    ctx.beginPath();
+    rings.forEach(ring=>{
+      ring.forEach((coord,i)=>{
+        const [x,y] = project(coord[0], coord[1]);
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.closePath();
+    });
+    ctx.fill();
+    ctx.stroke();
+  });
+}
+
+function drawShapeOnCanvas(ctx, x, y, shape, hex, size){
+  ctx.fillStyle = hex;
+  ctx.strokeStyle = '#12324A';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  if(shape==="square"){
+    ctx.rect(x-size/2, y-size/2, size, size);
+  } else if(shape==="diamond"){
+    ctx.moveTo(x, y-size/2); ctx.lineTo(x+size/2, y); ctx.lineTo(x, y+size/2); ctx.lineTo(x-size/2, y); ctx.closePath();
+  } else if(shape==="triangle"){
+    ctx.moveTo(x, y-size/2); ctx.lineTo(x+size/2, y+size/2); ctx.lineTo(x-size/2, y+size/2); ctx.closePath();
+  } else {
+    ctx.arc(x, y, size/2, 0, Math.PI*2);
+  }
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawExportLegendOnCanvas(ctx, x0, y0, groupsPresent, typesPresent, prospectPresent){
+  const lineH = 18;
+  let lines = 1; // titre
+  if(groupsPresent.length) lines += 1 + groupsPresent.length;
+  if(typesPresent.length) lines += 1 + typesPresent.length;
+  if(prospectPresent.length) lines += 1 + prospectPresent.length;
+  const boxH = 16 + lines*lineH;
+  const boxW = 190;
+
+  ctx.fillStyle = 'rgba(255,255,255,.94)';
+  ctx.strokeStyle = '#D8D0BC';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(x0, y0-boxH, boxW, boxH, 9) : ctx.rect(x0, y0-boxH, boxW, boxH);
+  ctx.fill(); ctx.stroke();
+
+  let cy = y0 - boxH + 24;
+  ctx.fillStyle = '#12324A';
+  ctx.font = "700 13px 'Space Grotesk', sans-serif";
+  ctx.fillText("Légende", x0+14, cy);
+  cy += lineH;
+
+  function section(title, items, renderItem){
+    if(!items.length) return;
+    ctx.fillStyle = '#5C6B7A';
+    ctx.font = "500 9.5px 'IBM Plex Mono', monospace";
+    ctx.fillText(title, x0+14, cy);
+    cy += lineH;
+    items.forEach(item=>{
+      renderItem(item, x0+19, cy-4);
+      ctx.fillStyle = '#12324A';
+      ctx.font = "400 11.5px 'Inter', sans-serif";
+      ctx.fillText(item.label, x0+32, cy);
+      cy += lineH;
+    });
+  }
+  section("STATUT", groupsPresent.map(g=>({label:g, hex:GROUP_COLORS[g]})), (item,x,y)=>{
+    drawShapeOnCanvas(ctx, x, y, "circle", item.hex, 10);
+  });
+  section("TYPE", typesPresent.map(t=>{ const ty=TYPE_SHAPE[t]||TYPE_SHAPE[""]; return {label:ty.label, shape:ty.shape}; }), (item,x,y)=>{
+    drawShapeOnCanvas(ctx, x, y, item.shape, "#5C6B7A", 10);
+  });
+  section("PROSPECTS", prospectPresent.map(s=>{ const st=PROSPECT_STYLE[s]||PROSPECT_STYLE[""]; return {label:st.label, hex:st.hex}; }), (item,x,y)=>{
+    drawShapeOnCanvas(ctx, x, y, "circle", item.hex, 10);
+  });
+}
+
+document.getElementById('btn-export').onclick = async ()=>{
+  const btn = document.getElementById('btn-export');
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = "Export en cours…";
+  await new Promise(r=>setTimeout(r,10));
+
+  try{
+    const W = 1600, H = 1600, PAD = 90;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // fond bleu
+    const grad = ctx.createRadialGradient(W*0.5, H*0.4, 50, W*0.5, H*0.4, W*0.8);
+    grad.addColorStop(0, '#1D5073');
+    grad.addColorStop(1, '#153E5A');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,W,H);
+
+    const project = computeFranceProjection(W, H, PAD);
+    drawFranceOnCanvas(ctx, project);
+
+    const visible = ALL.filter(d=> passesFilters(d) && markersByKey[d.projet] && markersByKey[d.projet].latlng);
+    visible.forEach(d=>{
+      const ll = markersByKey[d.projet].latlng;
+      const [x,y] = project(ll.lng, ll.lat);
+      const sty = styleFor(d);
+      drawShapeOnCanvas(ctx, x, y, sty.shape, sty.hex, 15);
+    });
+
+    const visibleSuivi = visible.filter(d=>d._layer==="suivi");
+    const visibleProspect = visible.filter(d=>d._layer==="prospect");
+    const groupsPresent = GROUP_ORDER.filter(g=> visibleSuivi.some(d=>statutGroup(d.statut)===g));
+    const typesPresent = [...new Set(visibleSuivi.map(d=>d.type))];
+    const prospectPresent = [...new Set(visibleProspect.map(d=>d.statut))];
+    drawExportLegendOnCanvas(ctx, 24, H-24, groupsPresent, typesPresent, prospectPresent);
+
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.font = "400 11px 'Inter', sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText('Contours France : IGN / data.gouv.fr', W-16, H-14);
+    ctx.textAlign = 'left';
+
+    const link = document.createElement('a');
+    const d = new Date();
+    const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    link.download = `carte_projets_france_${stamp}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+  }catch(err){
+    alert("Export impossible : "+err.message);
+  }
+  btn.innerHTML = originalHtml;
+};
+
+
+/* ================= INIT ================= */
+// Une fois la fonction Azure déployée (voir README.md), collez son URL ici.
+// Elle s'appliquera alors automatiquement à TOUS les visiteurs du lien — sans
+// que chacun ait à la saisir dans le champ "Synchronisation automatique".
+const DEFAULT_SYNC_URL = "";
+
+async function boot(){
+  buildStatutList();
+  buildTypeList();
+  buildCommercialSelect();
+  updateStatsBox(0);
+
+  let savedUrl = await getCache('autoSyncUrl');
+  if(!savedUrl && DEFAULT_SYNC_URL) savedUrl = DEFAULT_SYNC_URL;
+  if(savedUrl){
+    document.getElementById('sync-url-input').value = savedUrl;
+  }
+
+  const saved = await getCache('lastData');
+  if(saved && saved.suivi && saved.suivi.length){
+    RAW.suivi = saved.suivi;
+    RAW.prospect = saved.prospect;
+    rebuildDerived();
+    buildStatutList();
+    buildTypeList();
+    buildCommercialSelect();
+    const d = new Date(saved.savedAt);
+    document.getElementById('data-meta').innerHTML = `Dernières données : ${d.toLocaleDateString('fr-FR')} à ${d.toLocaleTimeString('fr-FR')}`;
+  }
+  initGeocoding();
+
+  if(savedUrl){
+    document.getElementById('sync-status').textContent = "Synchronisation en cours…";
+    const ok = await trySync(savedUrl, false);
+    document.getElementById('sync-status').textContent = ok
+      ? "Synchronisation automatique active."
+      : "Synchronisation impossible pour l'instant — dernières données locales conservées.";
+  }
+}
+boot();
+</script>
+</body>
+</html>
