@@ -365,9 +365,9 @@ const GROUP_COLORS = {"Signé":"#3FBE8E", "Étude en cours":"#4C8DFF", "KO":"#E5
 const GROUP_ORDER = ["Signé","Étude en cours","KO"];
 
 const PROSPECT_STYLE = {
-  "Nouveau":              {hex:"#0E8E9C", label:"Nouveau"},
-  "R1 prévu":             {hex:"#2E6FCC", label:"R1 prévu"},
-  "R1 fait":              {hex:"#2E9E6E", label:"R1 fait"},
+  "Nouveau":              {hex:"#0F7AA8", label:"Nouveau"},
+  "R1 prévu":             {hex:"#8B5CD6", label:"R1 prévu"},
+  "R1 fait":              {hex:"#E0559B", label:"R1 fait"},
   "R1 à caler":           {hex:"#C98A1E", label:"R1 à caler"},
   "R1 difficile à caler": {hex:"#B5601E", label:"R1 difficile à caler"},
   "KO":                   {hex:"#8A5C5C", label:"KO"},
@@ -1133,7 +1133,7 @@ document.getElementById('btn-export').onclick = async ()=>{
 // Une fois la fonction Azure déployée (voir README.md), collez son URL ici.
 // Elle s'appliquera alors automatiquement à TOUS les visiteurs du lien — sans
 // que chacun ait à la saisir dans le champ "Synchronisation automatique".
-const DEFAULT_SYNC_URL = "https://gist.githubusercontent.com/SolalDIMEO/df4e979a060d5bb9e232627deaaea35d/raw/data.json";
+const DEFAULT_SYNC_URL = "";
 
 async function boot(){
   buildStatutList();
